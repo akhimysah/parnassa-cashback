@@ -142,3 +142,16 @@ describe('notifications', () => {
     expect(ev.every((x) => x.date <= plusTard)).toBe(true);
   });
 });
+
+describe('alertes favoris', () => {
+  it('signale un favori en flash ou boosté', () => {
+    const flash = M.offreFlash(T).marchandId;
+    const boost = M.boostsDeLaSemaine(T)[0];
+    let e = M.basculerFavori(M.basculerFavori(neuf(), flash), boost);
+    const ev = evenements(e, T);
+    expect(ev.some((x) => x.id.startsWith('fav-flash:'))).toBe(true);
+    expect(ev.some((x) => x.id.startsWith(`fav-boost:${boost}:`))).toBe(true);
+    e = M.basculerFavori(M.basculerFavori(e, flash), boost);
+    expect(evenements(e, T).some((x) => x.id.startsWith('fav-'))).toBe(false);
+  });
+});

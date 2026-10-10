@@ -10,7 +10,7 @@ export function restant(fin: number, t: number): string {
 }
 
 /** Encart de l'offre flash du jour, avec compte à rebours. */
-export function Flash({ etat, t, modifier, signaler, ouvrirMarchand }: Contexte) {
+export function Flash({ etat, t, ouvrirMarchand, ouvrirBoutique }: Contexte) {
   const f = M.offreFlash(t);
   const m = trouverMarchand(f.marchandId)!;
   const { multiplicateur } = M.palierActuel(etat, t).palier;
@@ -30,14 +30,8 @@ export function Flash({ etat, t, modifier, signaler, ouvrirMarchand }: Contexte)
           </span>
         </span>
       </button>
-      <button
-        className={`bouton ${actif ? 'secondaire' : 'blanc'}`}
-        onClick={() => {
-          if (actif) return ouvrirMarchand(m.id);
-          if (modifier((e) => M.basculerOffre(e, m.id))) signaler(`Offre flash ${m.nom} activée`);
-        }}
-      >
-        {actif ? 'Offre activée · voir' : "J'en profite"}
+      <button className="bouton blanc" onClick={() => ouvrirBoutique(m.id)}>
+        {actif ? 'Aller sur le site ↗' : "J'en profite ↗"}
       </button>
     </section>
   );

@@ -4,6 +4,7 @@ import { MARCHANDS, trouverMarchand } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
 import { Statistiques } from './Statistiques';
+import { DetailAchat } from './DetailAchat';
 
 const STATUTS: Record<M.Statut, string> = { en_attente: 'En attente', disponible: 'Disponible', annule: 'Annulé' };
 const DESTINATIONS = {
@@ -36,7 +37,42 @@ export function Activite(ctx: Contexte) {
   );
 }
 
-function Historique({ etat, t, modifier, signaler }: Contexte) {
+type FiltreHistorique = 'tout' | 'en_attente' | 'disponible' | 'bonus' | 'sorties';
+const FILTRES: [FiltreHistorique, string][] = [
+  ['tout', 'Tout'],
+  ['en_attente', 'En attente'],
+  ['disponible', 'Disponible'],
+  ['bonus', 'Bonus'],
+  ['sorties', 'Sorties'],
+];
+
+function garder(l: Ligne, filtre: FiltreHistorique): boolean {
+  switch (filtre) {
+    case 'tout':
+      return true;
+    case 'en_attente':
+      return (l.type === 'achat' && l.a.statut === 'en_attente') || (l.type === 'parrainage' && l.p.statut === 'en_attente');
+    case 'disponible':
+      return (l.type === 'achat' && l.a.statut === 'disponible') || (l.type === 'parrainage' && l.p.statut === 'disponible');
+    case 'bonus':
+      return l.type === 'bonus' || l.type === 'parrainage';
+    case 'sorties':
+      return l.type === 'versement';
+  }
+}
+
+function texteDe(l: Ligne): string {
+  if (l.type === 'achat') return `${l.a.libelle} ${trouverMarchand(l.a.marchandId)?.categorie ?? ''}`;
+  if (l.type === 'parrainage') return `parrainage ${l.p.prenom}`;
+  if (l.type === 'bonus') return l.b.libelle;
+  return `versement ${l.v.destination}`;
+}
+
+function Historique(ctx: Contexte) {
+  const { etat, t, modifier, signaler } = ctx;
+  const [filtre, setFiltre] = useState<FiltreHistorique>('tout');
+  const [recherche, setRecherche] = useState('');
+  const [detail, setDetail] = useState<string | null>(null);
   const [marchandId, setMarchandId] = useState<string>('');
   const [saisie, setSaisie] = useState('');
   const montant = M.lireMontant(saisie);
@@ -50,11 +86,15 @@ function Historique({ etat, t, modifier, signaler }: Contexte) {
     ...etat.bonus.map((b) => ({ type: 'bonus' as const, date: b.date, b })),
     ...etat.versements.map((v) => ({ type: 'versement' as const, date: v.date, v })),
   ].sort((x, y) => y.date - x.date);
+  const q = recherche.trim().toLocaleLowerCase('fr');
+  const visibles = lignes.filter((l) => garder(l, filtre) && (!q || texteDe(l).toLocaleLowerCase('fr').includes(q)));
 
   return (
     <>
+      <details className="carte saisie-rapide" open={etat.achats.length === 0}>
+        <summary><b>Simuler un paiement par carte</b></summary>
       <form
-        className="carte formulaire"
+        className="formulaire"
         onSubmit={(e) => {
           e.preventDefault();
           if (!montant) return;
@@ -62,7 +102,6 @@ function Historique({ etat, t, modifier, signaler }: Contexte) {
           setSaisie('');
         }}
       >
-        <b>Simuler un paiement par carte</b>
         <select className="champ" value={marchandId} onChange={(e) => setMarchandId(e.target.value)}>
           <option value="">Autre commerçant ({M.formatTaux(M.tauxEffectif(etat, null, t))})</option>
           {MARCHANDS.map((m) => (
@@ -77,18 +116,33 @@ function Historique({ etat, t, modifier, signaler }: Contexte) {
           Payer {montant ? M.formatEuros(montant) : ''} · cashback {M.formatEuros(apercu)}
         </button>
       </form>
+      </details>
+
+      {lignes.length > 0 && (
+        <>
+          <input className="champ" type="search" placeholder="Rechercher une opération" value={recherche} onChange={(e) => setRecherche(e.target.value)} aria-label="Rechercher une opération" />
+          <div className="filtres">
+            {FILTRES.map(([id, libelle]) => (
+              <button key={id} className={`puce ${filtre === id ? 'active' : ''}`} onClick={() => setFiltre(id)} aria-pressed={filtre === id}>
+                {libelle}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <ul className="liste">
         {lignes.length === 0 && <li className="vide">Aucune opération pour l'instant.</li>}
-        {lignes.map((l) => {
+        {lignes.length > 0 && visibles.length === 0 && <li className="vide">Aucune opération ne correspond.</li>}
+        {visibles.map((l) => {
           if (l.type === 'achat') {
             const { a } = l;
             const restant = Math.ceil((a.disponibleLe - t) / M.JOUR);
             return (
-              <li key={a.id} className={`operation ${a.statut}`}>
+              <li key={a.id} className={`operation cliquable ${a.statut}`} onClick={() => setDetail(a.id)}>
                 <Logo marchand={trouverMarchand(a.marchandId)} taille={38} />
                 <div className="offre-texte">
-                  <b>{a.libelle}</b>
+                  <button className="lien-operation" onClick={(e) => { e.stopPropagation(); setDetail(a.id); }}>{a.libelle}</button>
                   <span className="discret">
                     {date.format(a.date)} · {M.formatEuros(a.montant)}
                     {a.statut === 'en_attente' && ` · dispo dans ${restant} j`}
@@ -97,9 +151,6 @@ function Historique({ etat, t, modifier, signaler }: Contexte) {
                 <div className="offre-action">
                   <span className="montant">+{M.formatEuros(a.cashback)}</span>
                   <span className={`statut ${a.statut}`}>{STATUTS[a.statut]}</span>
-                  {a.statut === 'en_attente' && (
-                    <button className="lien petit" onClick={() => modifier((s) => M.annulerAchat(s, a.id))}>Retour produit</button>
-                  )}
                 </div>
               </li>
             );
@@ -151,6 +202,7 @@ function Historique({ etat, t, modifier, signaler }: Contexte) {
           );
         })}
       </ul>
+      {detail && <DetailAchat id={detail} fermer={() => setDetail(null)} {...ctx} />}
     </>
   );
 }

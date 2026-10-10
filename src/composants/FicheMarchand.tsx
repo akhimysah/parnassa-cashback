@@ -4,12 +4,13 @@ import { trouverMarchand } from '../marchands';
 import * as M from '../moteur';
 import { valeurCarte } from '../cartes';
 import { bilanMarchand } from '../statistiques';
+import { codesDe } from '../codes';
 import { Feuille } from './Feuille';
 import { Logo } from './Logo';
 
 const jour = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-export function FicheMarchand({ id, fermer, etat, t, modifier, signaler }: Contexte & { id: string; fermer: () => void }) {
+export function FicheMarchand({ id, fermer, etat, t, modifier, signaler, ouvrirBoutique }: Contexte & { id: string; fermer: () => void }) {
   const m = trouverMarchand(id)!;
   const [saisie, setSaisie] = useState('');
   const actif = etat.offresActivees.includes(m.id);
@@ -72,25 +73,56 @@ export function FicheMarchand({ id, fermer, etat, t, modifier, signaler }: Conte
         </p>
       )}
 
-      <button className={`bouton ${actif ? 'secondaire' : ''}`} onClick={() => modifier((e) => M.basculerOffre(e, m.id))}>
-        {actif ? '✓ Offre activée — désactiver' : "Activer l'offre"}
+      {codesDe(m.id).length > 0 && (
+        <div className="codes">
+          {codesDe(m.id).map((c) => (
+            <button
+              key={c.code}
+              className="code-promo"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(c.code);
+                  signaler(`Code ${c.code} copié`);
+                } catch {
+                  signaler(`Code : ${c.code}`);
+                }
+              }}
+              aria-label={`Copier le code ${c.code} : ${c.description}`}
+            >
+              <span className="code-promo-code">{c.code}</span>
+              <span className="petit-texte">{c.description} · cumulable</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <button className="bouton" onClick={() => ouvrirBoutique(m.id)}>
+        {actif ? 'Aller sur le site' : 'Activer et aller sur le site'} ↗
       </button>
+      {actif && (
+        <button className="lien petit centre" onClick={() => modifier((e) => M.basculerOffre(e, m.id))}>
+          Désactiver l'offre
+        </button>
+      )}
 
       {actif && (
-        <form
-          className="rangee"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!montant) return;
-            if (modifier((s, tt) => M.enregistrerAchat(s, m.id, montant, tt))) signaler(`+${M.formatEuros(apercu)} de cashback en attente`);
-            setSaisie('');
-          }}
-        >
-          <input className="champ" inputMode="decimal" placeholder="Montant en €" value={saisie} onChange={(e) => setSaisie(e.target.value)} aria-label="Montant de l'achat" />
-          <button className="bouton" disabled={!montant} style={{ width: 'auto', whiteSpace: 'nowrap' }}>
-            Payer{montant ? ` · +${M.formatEuros(apercu)}` : ''}
-          </button>
-        </form>
+        <details className="saisie-rapide">
+          <summary>Déclarer un paiement en magasin</summary>
+          <form
+            className="rangee"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!montant) return;
+              if (modifier((s, tt) => M.enregistrerAchat(s, m.id, montant, tt))) signaler(`+${M.formatEuros(apercu)} de cashback en attente`);
+              setSaisie('');
+            }}
+          >
+            <input className="champ" inputMode="decimal" placeholder="Montant en €" value={saisie} onChange={(e) => setSaisie(e.target.value)} aria-label="Montant de l'achat" />
+            <button className="bouton secondaire" disabled={!montant} style={{ width: 'auto', whiteSpace: 'nowrap' }}>
+              Payer{montant ? ` · +${M.formatEuros(apercu)}` : ''}
+            </button>
+          </form>
+        </details>
       )}
     </Feuille>
   );

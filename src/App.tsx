@@ -13,6 +13,7 @@ import { Utiliser } from './composants/Utiliser';
 import { Bienvenue } from './composants/Bienvenue';
 import { Recap } from './composants/Recap';
 import { Simulateur } from './composants/Simulateur';
+import { Boutique } from './composants/Boutique';
 import { debloquerSucces, trouverSucces } from './succes';
 
 export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
@@ -41,6 +42,8 @@ export interface Contexte {
   /** Récap d'un mois (« 2026-10 ») ; par défaut le plus récent avec de l'activité. */
   ouvrirRecap: (cle?: string) => void;
   ouvrirSimulateur: () => void;
+  /** « Aller sur le site » : redirection suivie puis boutique de démonstration. */
+  ouvrirBoutique: (id: string) => void;
   nonLues: number;
 }
 
@@ -50,6 +53,7 @@ type Panneau =
   | { type: 'notifications' }
   | { type: 'recap'; cle?: string }
   | { type: 'simulateur' }
+  | { type: 'boutique'; id: string }
   | null;
 
 export function App() {
@@ -147,6 +151,7 @@ export function App() {
       ouvrirNotifications: () => setPanneau({ type: 'notifications' }),
       ouvrirRecap: (cle) => setPanneau({ type: 'recap', cle }),
       ouvrirSimulateur: () => setPanneau({ type: 'simulateur' }),
+      ouvrirBoutique: (id) => setPanneau({ type: 'boutique', id }),
       nonLues: nbNonLues,
       sousProfil,
     }),
@@ -176,6 +181,7 @@ export function App() {
       {panneau?.type === 'notifications' && <Notifications fermer={fermer} {...ctx} />}
       {panneau?.type === 'recap' && <Recap cle={panneau.cle} fermer={fermer} {...ctx} />}
       {panneau?.type === 'simulateur' && <Simulateur fermer={fermer} {...ctx} />}
+      {panneau?.type === 'boutique' && <Boutique key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
       {!etat.accueilVu && <Bienvenue terminer={() => setEtat((e) => ({ ...e, accueilVu: true }))} />}
       {message && <div className="toast" role="status">{message}</div>}
     </div>

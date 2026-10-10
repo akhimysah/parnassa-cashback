@@ -64,6 +64,17 @@ export function evenements(etat: Etat, t: number): Evenement[] {
   const flash = offreFlash(t);
   liste.push({ id: `flash:${flash.fin}`, date: debutJour(t), icone: '⏱️', titre: 'Offre flash du jour', texte: `${trouverMarchand(flash.marchandId)?.nom} : ${formatTaux(flash.taux * palierActuel(etat, t).palier.multiplicateur)} jusqu'à minuit.`, cible: 'offres' });
 
+  // Favoris en promo : alerte dédiée, en plus de l'annonce générale.
+  if (etat.favoris.includes(flash.marchandId)) {
+    const nom = trouverMarchand(flash.marchandId)?.nom;
+    liste.push({ id: `fav-flash:${flash.fin}`, date: debutJour(t), icone: '♥', titre: `${nom}, votre favori, est en flash`, texte: `${formatTaux(flash.taux * palierActuel(etat, t).palier.multiplicateur)} aujourd'hui seulement.`, cible: 'offres' });
+  }
+  for (const id of boostsDeLaSemaine(t).filter((x) => etat.favoris.includes(x))) {
+    const nom = trouverMarchand(id)?.nom;
+    const lundiBoost = finDeSemaine(t) - SEMAINE;
+    liste.push({ id: `fav-boost:${id}:${lundiBoost}`, date: lundiBoost, icone: '♥', titre: `${nom}, votre favori, est boosté`, texte: `${formatTaux(tauxMarchand(id, t) * palierActuel(etat, t).palier.multiplicateur)} jusqu'à dimanche.`, cible: 'offres' });
+  }
+
   // Boosts de la semaine en cours, annoncés le lundi.
   const lundi = finDeSemaine(t) - SEMAINE;
   const { multiplicateur } = palierActuel(etat, t).palier;
