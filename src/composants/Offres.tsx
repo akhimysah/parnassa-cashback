@@ -4,30 +4,48 @@ import { CATEGORIES, MARCHANDS, type Categorie } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
 
-type Filtre = Categorie | 'Activées' | 'Boostées' | null;
+type Filtre = Categorie | 'Activées' | 'Boostées' | 'Favoris' | null;
+type Tri = 'taux' | 'nom' | 'delai';
 
 export function Offres({ etat, t, modifier, signaler, ouvrirMarchand }: Contexte) {
   const [recherche, setRecherche] = useState('');
   const [filtre, setFiltre] = useState<Filtre>(null);
+  const [tri, setTri] = useState<Tri>('taux');
   const mult = M.palierActuel(etat, t).palier.multiplicateur;
   const boosts = M.boostsDeLaSemaine(t);
 
   const q = recherche.trim().toLocaleLowerCase('fr');
   const garde = (id: string, categorie: Categorie) =>
     filtre === null ||
-    (filtre === 'Activées' ? etat.offresActivees.includes(id) : filtre === 'Boostées' ? boosts.includes(id) : categorie === filtre);
+    (filtre === 'Activées'
+      ? etat.offresActivees.includes(id)
+      : filtre === 'Boostées'
+        ? boosts.includes(id)
+        : filtre === 'Favoris'
+          ? etat.favoris.includes(id)
+          : categorie === filtre);
   const liste = MARCHANDS.filter(
     (m) => (!q || m.nom.toLocaleLowerCase('fr').includes(q) || m.accroche.toLocaleLowerCase('fr').includes(q)) && garde(m.id, m.categorie),
-  ).sort((a, b) => M.tauxMarchand(b.id, t) - M.tauxMarchand(a.id, t));
+  ).sort((a, b) =>
+    tri === 'nom' ? a.nom.localeCompare(b.nom, 'fr') : tri === 'delai' ? a.delaiJours - b.delaiJours : M.tauxMarchand(b.id, t) - M.tauxMarchand(a.id, t),
+  );
 
   return (
     <>
       <h1>Offres partenaires</h1>
-      <input className="champ" type="search" placeholder="Rechercher un marchand" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+      <div className="rangee">
+        <input className="champ" type="search" placeholder="Rechercher un marchand" value={recherche} onChange={(e) => setRecherche(e.target.value)} aria-label="Rechercher un marchand" />
+        <select className="champ tri" value={tri} onChange={(e) => setTri(e.target.value as Tri)} aria-label="Trier">
+          <option value="taux">Meilleur taux</option>
+          <option value="nom">A → Z</option>
+          <option value="delai">Plus rapide</option>
+        </select>
+      </div>
       <div className="filtres">
-        {([null, 'Boostées', 'Activées', ...CATEGORIES] as const).map((c) => (
+        {([null, 'Boostées', 'Favoris', 'Activées', ...CATEGORIES] as const).map((c) => (
           <button key={c ?? 'tout'} className={`puce ${filtre === c ? 'active' : ''}`} onClick={() => setFiltre(c)}>
             {c === 'Boostées' && '⚡ '}
+            {c === 'Favoris' && '♥ '}
             {c ?? 'Tout'}
             {c === 'Activées' && ` (${etat.offresActivees.length})`}
           </button>
@@ -42,7 +60,7 @@ export function Offres({ etat, t, modifier, signaler, ouvrirMarchand }: Contexte
               <button className="offre-ouvrir" onClick={() => ouvrirMarchand(m.id)} aria-label={`Détails de l'offre ${m.nom}`}>
                 <Logo marchand={m} />
                 <div className="offre-texte">
-                  <b>{m.nom}</b>
+                  <b>{etat.favoris.includes(m.id) && <span className="coeur-mini" aria-label="Favori">♥ </span>}{m.nom}</b>
                   <span className="discret">{m.accroche}</span>
                   <span className="conditions">
                     {booste && <span className="eclair">⚡ Boost ×{M.COEF_BOOST.toLocaleString('fr-FR')} · </span>}

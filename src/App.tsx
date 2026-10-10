@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { charger, sauver } from './etat';
 import * as M from './moteur';
+import { evenements, nonLues } from './notifications';
 import { Accueil } from './composants/Accueil';
 import { Offres } from './composants/Offres';
 import { Activite } from './composants/Activite';
-import { Parrainer } from './composants/Parrainer';
 import { Defis } from './composants/Defis';
+import { Profil } from './composants/Profil';
 import { FicheMarchand } from './composants/FicheMarchand';
+import { Notifications } from './composants/Notifications';
+import { Utiliser } from './composants/Utiliser';
+import { Bienvenue } from './composants/Bienvenue';
 
-export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'parrainer';
+export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
+export type SousProfil = 'menu' | 'coffre' | 'cartes' | 'reclamations' | 'parrainage' | 'reglages';
 
 const ONGLETS: { id: Onglet; libelle: string; icone: string }[] = [
   { id: 'accueil', libelle: 'Accueil', icone: '◎' },
   { id: 'offres', libelle: 'Offres', icone: '✦' },
   { id: 'defis', libelle: 'Défis', icone: '★' },
   { id: 'activite', libelle: 'Activité', icone: '≡' },
-  { id: 'parrainer', libelle: 'Parrainer', icone: '♥' },
+  { id: 'profil', libelle: 'Profil', icone: '☺' },
 ];
 
 export interface Contexte {
@@ -23,17 +28,25 @@ export interface Contexte {
   t: number;
   /** Applique une modification ; renvoie false (et affiche l'erreur) si elle est refusée. */
   modifier: (f: (e: M.Etat, t: number) => M.Etat) => boolean;
-  aller: (o: Onglet) => void;
+  /** Change d'onglet ; pour le profil, on peut viser directement une sous-page. */
+  aller: (o: Onglet, sous?: SousProfil) => void;
+  sousProfil: SousProfil;
   signaler: (message: string) => void;
   ouvrirMarchand: (id: string) => void;
+  ouvrirUtiliser: () => void;
+  ouvrirNotifications: () => void;
+  nonLues: number;
 }
+
+type Panneau = { type: 'marchand'; id: string } | { type: 'utiliser' } | { type: 'notifications' } | null;
 
 export function App() {
   const [etat, setEtat] = useState(charger);
   const [onglet, setOnglet] = useState<Onglet>('accueil');
+  const [sousProfil, setSousProfil] = useState<SousProfil>('menu');
   const [horloge, setHorloge] = useState(Date.now);
   const [message, setMessage] = useState<string | null>(null);
-  const [fiche, setFiche] = useState<string | null>(null);
+  const [panneau, setPanneau] = useState<Panneau>(null);
   const t = M.maintenant(etat, horloge);
 
   useEffect(() => {
@@ -41,13 +54,45 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
-  // Le cashback dont le délai est écoulé devient disponible.
+  // Le cashback dont le délai est écoulé devient disponible, les réclamations sont tranchées,
+  // puis le versement automatique s'applique.
   useEffect(() => {
-    const suivant = M.actualiser(etat, t);
+    let suivant = M.actualiser(etat, t);
+    try {
+      const avant = suivant;
+      suivant = M.appliquerAutomatismes(suivant, t);
+      if (suivant !== avant) {
+        const v = suivant.versements[0];
+        setMessage(`${M.formatEuros(v.montant)} versés automatiquement ${v.destination === 'coffre' ? `dans « ${suivant.coffre.nom} »` : 'sur votre compte'}`);
+      }
+    } catch {
+      // Seuil devenu invalide : on laisse le disponible en place.
+    }
     if (suivant !== etat) setEtat(suivant);
   }, [etat, t]);
 
   useEffect(() => sauver(etat), [etat]);
+
+  useEffect(() => {
+    const racine = document.documentElement;
+    if (etat.reglages.theme === 'auto') delete racine.dataset.theme;
+    else racine.dataset.theme = etat.reglages.theme === 'sombre' ? 'dark' : 'light';
+  }, [etat.reglages.theme]);
+
+  // Notifications du navigateur pour les événements apparus depuis le dernier envoi.
+  useEffect(() => {
+    if (!etat.reglages.notifications || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const nouveaux = evenements(etat, t).filter((ev) => ev.date > etat.notificationsEnvoyees);
+    if (!nouveaux.length) return;
+    for (const ev of nouveaux.slice(0, 3)) {
+      try {
+        new Notification(ev.titre, { body: ev.texte, tag: ev.id, icon: `${import.meta.env.BASE_URL}icone-192.png` });
+      } catch {
+        // Certains navigateurs mobiles n'acceptent que les notifications du service worker.
+      }
+    }
+    setEtat((e) => ({ ...e, notificationsEnvoyees: nouveaux[0].date }));
+  }, [etat, t]);
 
   useEffect(() => {
     if (!message) return;
@@ -55,6 +100,7 @@ export function App() {
     return () => clearTimeout(id);
   }, [message]);
 
+  const nbNonLues = nonLues(etat, t);
   const ctx: Contexte = useMemo(
     () => ({
       etat,
@@ -71,31 +117,43 @@ export function App() {
           return false;
         }
       },
-      aller: setOnglet,
+      aller: (o, sous = 'menu') => {
+        setOnglet(o);
+        setSousProfil(sous);
+        window.scrollTo(0, 0);
+      },
       signaler: setMessage,
-      ouvrirMarchand: setFiche,
+      ouvrirMarchand: (id) => setPanneau({ type: 'marchand', id }),
+      ouvrirUtiliser: () => setPanneau({ type: 'utiliser' }),
+      ouvrirNotifications: () => setPanneau({ type: 'notifications' }),
+      nonLues: nbNonLues,
+      sousProfil,
     }),
-    [etat, t],
+    [etat, t, nbNonLues, sousProfil],
   );
+  const fermer = () => setPanneau(null);
 
   return (
     <div className="appli">
-      <main className="contenu" key={onglet}>
+      <main className="contenu" key={`${onglet}:${sousProfil}`}>
         {onglet === 'accueil' && <Accueil {...ctx} />}
         {onglet === 'offres' && <Offres {...ctx} />}
         {onglet === 'defis' && <Defis {...ctx} />}
         {onglet === 'activite' && <Activite {...ctx} />}
-        {onglet === 'parrainer' && <Parrainer {...ctx} />}
+        {onglet === 'profil' && <Profil {...ctx} />}
       </main>
       <nav className="barre" aria-label="Navigation principale">
         {ONGLETS.map((o) => (
-          <button key={o.id} className={o.id === onglet ? 'actif' : ''} onClick={() => setOnglet(o.id)} aria-current={o.id === onglet ? 'page' : undefined}>
+          <button key={o.id} className={o.id === onglet ? 'actif' : ''} onClick={() => ctx.aller(o.id)} aria-current={o.id === onglet ? 'page' : undefined}>
             <span aria-hidden>{o.icone}</span>
             {o.libelle}
           </button>
         ))}
       </nav>
-      {fiche && <FicheMarchand key={fiche} id={fiche} fermer={() => setFiche(null)} {...ctx} />}
+      {panneau?.type === 'marchand' && <FicheMarchand key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
+      {panneau?.type === 'utiliser' && <Utiliser fermer={fermer} {...ctx} />}
+      {panneau?.type === 'notifications' && <Notifications fermer={fermer} {...ctx} />}
+      {!etat.accueilVu && <Bienvenue terminer={() => setEtat((e) => ({ ...e, accueilVu: true }))} />}
       {message && <div className="toast" role="status">{message}</div>}
     </div>
   );

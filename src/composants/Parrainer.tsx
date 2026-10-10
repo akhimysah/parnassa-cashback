@@ -8,7 +8,6 @@ export function Parrainer({ etat, modifier, signaler }: Contexte) {
 
   return (
     <>
-      <h1>Parrainer</h1>
       <section className="heros compact">
         <p className="etiquette">Vous gagnez {M.formatEuros(M.BONUS_PARRAINAGE)} par ami</p>
         <p className="code">{etat.codeParrainage}</p>

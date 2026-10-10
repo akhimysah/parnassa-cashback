@@ -10,6 +10,9 @@ export const DELAI_BASE_JOURS = 30;
 export const VERSEMENT_MINIMUM = 1000;
 export const BONUS_PARRAINAGE = 1000;
 export const DELAI_PARRAINAGE_JOURS = 30;
+export const DELAI_RECLAMATION_JOURS = 14;
+/** Une réclamation ne porte que sur un achat des 90 derniers jours. */
+export const ANCIENNETE_RECLAMATION_JOURS = 90;
 
 export type Statut = 'en_attente' | 'disponible' | 'annule';
 
@@ -43,10 +46,61 @@ export interface Bonus {
   date: number;
 }
 
+export type Destination = 'compte' | 'coffre' | 'carte';
+
+/** Sortie du solde disponible : vers le compte Parnassa, le coffre ou une carte cadeau. */
 export interface Versement {
   id: string;
   montant: number;
   date: number;
+  destination: Destination;
+}
+
+export interface Mouvement {
+  id: string;
+  montant: number;
+  date: number;
+}
+
+export interface Coffre {
+  nom: string;
+  objectif: number;
+  /** Retraits du coffre vers le compte Parnassa (les dépôts sont les versements « coffre »). */
+  retraits: Mouvement[];
+}
+
+export interface CarteCadeau {
+  id: string;
+  marchandId: string;
+  paye: number;
+  valeur: number;
+  code: string;
+  date: number;
+  utilisee: boolean;
+}
+
+export type StatutReclamation = 'en_etude' | 'acceptee' | 'refusee';
+
+/** Achat chez un partenaire qui n'a pas été crédité (offre oubliée, suivi perdu). */
+export interface Reclamation {
+  id: string;
+  marchandId: string;
+  montant: number;
+  dateAchat: number;
+  date: number;
+  decisionLe: number;
+  statut: StatutReclamation;
+  motif?: string;
+}
+
+export type Theme = 'auto' | 'clair' | 'sombre';
+
+export interface Reglages {
+  theme: Theme;
+  /** Versement automatique dès que le disponible atteint ce seuil (centimes) ; null = désactivé. */
+  autoSeuil: number | null;
+  autoDestination: 'compte' | 'coffre';
+  notifications: boolean;
 }
 
 export interface Etat {
@@ -57,6 +111,16 @@ export interface Etat {
   parrainages: Parrainage[];
   bonus: Bonus[];
   versements: Versement[];
+  favoris: string[];
+  coffre: Coffre;
+  cartes: CarteCadeau[];
+  reclamations: Reclamation[];
+  reglages: Reglages;
+  /** Date du dernier événement vu dans le centre de notifications. */
+  notificationsLues: number;
+  /** Date du dernier événement signalé par une notification du navigateur. */
+  notificationsEnvoyees: number;
+  accueilVu: boolean;
   /** Décalage de l'horloge pour la démonstration (« avancer le temps »). */
   decalage: number;
 }
@@ -75,11 +139,49 @@ export const PALIERS: Palier[] = [
   { nom: 'Platine', seuil: 500_000, multiplicateur: 2 },
 ];
 
-export function etatInitial(alea: () => number = Math.random): Etat {
+export function genererCode(alea: () => number, prefixe: string, longueur: number): string {
   const lettres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = 'PARN-';
-  for (let i = 0; i < 6; i++) code += lettres[Math.floor(alea() * lettres.length)];
-  return { version: 1, codeParrainage: code, offresActivees: [], achats: [], parrainages: [], bonus: [], versements: [], decalage: 0 };
+  let code = prefixe;
+  for (let i = 0; i < longueur; i++) code += lettres[Math.floor(alea() * lettres.length)];
+  return code;
+}
+
+export function etatInitial(alea: () => number = Math.random): Etat {
+  return { version: 1, codeParrainage: genererCode(alea, 'PARN-', 6), decalage: 0, ...champsParDefaut(), accueilVu: false };
+}
+
+function champsParDefaut() {
+  return {
+    offresActivees: [] as string[],
+    achats: [] as Achat[],
+    parrainages: [] as Parrainage[],
+    bonus: [] as Bonus[],
+    versements: [] as Versement[],
+    favoris: [] as string[],
+    coffre: { nom: 'Mon coffre', objectif: 20_000, retraits: [] } as Coffre,
+    cartes: [] as CarteCadeau[],
+    reclamations: [] as Reclamation[],
+    reglages: { theme: 'auto', autoSeuil: null, autoDestination: 'compte', notifications: false } as Reglages,
+    notificationsLues: 0,
+    notificationsEnvoyees: 0,
+  };
+}
+
+/** Complète un état enregistré par une version antérieure de l'application. */
+export function migrer(brut: unknown): Etat | null {
+  const e = brut as Partial<Etat> | null;
+  if (!e || e.version !== 1 || typeof e.codeParrainage !== 'string') return null;
+  const defaut = champsParDefaut();
+  return {
+    ...defaut,
+    ...e,
+    // Les états d'avant l'onboarding ont déjà servi : on ne remontre pas l'accueil.
+    accueilVu: e.accueilVu ?? true,
+    decalage: e.decalage ?? 0,
+    versements: (e.versements ?? []).map((v) => ({ ...v, destination: v.destination ?? 'compte' })),
+    coffre: { ...defaut.coffre, ...e.coffre },
+    reglages: { ...defaut.reglages, ...e.reglages },
+  } as Etat;
 }
 
 export function maintenant(etat: Etat, horloge = Date.now()): number {
@@ -200,14 +302,71 @@ export function ajouterParrainage(etat: Etat, prenom: string, t: number): Etat {
   return { ...etat, parrainages: [p, ...etat.parrainages] };
 }
 
-/** Fait passer en « disponible » tout ce dont le délai est écoulé. Renvoie le même objet si rien ne change. */
+export function declarerReclamation(etat: Etat, marchandId: string, montant: number, dateAchat: number, t: number): Etat {
+  if (!trouverMarchand(marchandId)) throw new Error('Marchand inconnu');
+  if (!Number.isInteger(montant) || montant <= 0) throw new Error('Montant invalide');
+  if (dateAchat > t) throw new Error("La date d'achat est dans le futur");
+  if (dateAchat < t - ANCIENNETE_RECLAMATION_JOURS * JOUR) throw new Error(`Achat de plus de ${ANCIENNETE_RECLAMATION_JOURS} jours`);
+  const enDouble = etat.reclamations.some(
+    (r) => r.statut !== 'refusee' && r.marchandId === marchandId && r.montant === montant && Math.abs(r.dateAchat - dateAchat) < 2 * JOUR,
+  );
+  if (enDouble) throw new Error('Une réclamation existe déjà pour cet achat');
+  const r: Reclamation = {
+    id: nouvelId('r', t),
+    marchandId,
+    montant,
+    dateAchat,
+    date: t,
+    decisionLe: t + DELAI_RECLAMATION_JOURS * JOUR,
+    statut: 'en_etude',
+  };
+  return { ...etat, reclamations: [r, ...etat.reclamations] };
+}
+
+/** Décision sur une réclamation : refusée si un achat identique a déjà été crédité, sinon créditée au taux du marchand. */
+function deciderReclamation(etat: Etat, r: Reclamation): { reclamation: Reclamation; achat?: Achat } {
+  const doublon = etat.achats.some(
+    (a) => a.statut !== 'annule' && a.marchandId === r.marchandId && a.montant === r.montant && Math.abs(a.date - r.dateAchat) < 2 * JOUR,
+  );
+  if (doublon) return { reclamation: { ...r, statut: 'refusee', motif: 'Cet achat a déjà été crédité.' } };
+  const marchand = trouverMarchand(r.marchandId)!;
+  const brut = Math.floor((r.montant * marchand.taux) / 100);
+  const cashback = marchand.plafond !== undefined ? Math.min(brut, marchand.plafond) : brut;
+  const achat: Achat = {
+    id: `${r.id}-achat`,
+    marchandId: r.marchandId,
+    libelle: `${marchand.nom} (réclamation)`,
+    montant: r.montant,
+    cashback,
+    date: r.dateAchat,
+    disponibleLe: r.decisionLe,
+    statut: 'disponible',
+  };
+  return { reclamation: { ...r, statut: 'acceptee' }, achat };
+}
+
+/** Fait passer en « disponible » tout ce dont le délai est écoulé et tranche les réclamations. Renvoie le même objet si rien ne change. */
 export function actualiser(etat: Etat, t: number): Etat {
   const mur = <T extends { statut: Statut; disponibleLe: number }>(x: T): T =>
     x.statut === 'en_attente' && x.disponibleLe <= t ? { ...x, statut: 'disponible' } : x;
-  const achats = etat.achats.map(mur);
+  let achats = etat.achats.map(mur);
   const parrainages = etat.parrainages.map(mur);
-  const change = achats.some((a, i) => a !== etat.achats[i]) || parrainages.some((p, i) => p !== etat.parrainages[i]);
-  return change ? { ...etat, achats, parrainages } : etat;
+  let change = achats.some((a, i) => a !== etat.achats[i]) || parrainages.some((p, i) => p !== etat.parrainages[i]);
+  let reclamations = etat.reclamations;
+  if (reclamations.some((r) => r.statut === 'en_etude' && r.decisionLe <= t)) {
+    change = true;
+    // Les plus anciennes d'abord, pour qu'un doublon entre deux réclamations soit détecté.
+    const ordre = [...reclamations].sort((a, b) => a.date - b.date);
+    const decisions = new Map<string, Reclamation>();
+    for (const r of ordre) {
+      if (r.statut !== 'en_etude' || r.decisionLe > t) continue;
+      const { reclamation, achat } = deciderReclamation({ ...etat, achats }, r);
+      decisions.set(r.id, reclamation);
+      if (achat) achats = [achat, ...achats].sort((a, b) => b.date - a.date);
+    }
+    reclamations = reclamations.map((r) => decisions.get(r.id) ?? r);
+  }
+  return change ? { ...etat, achats, parrainages, reclamations } : etat;
 }
 
 export interface Soldes {
@@ -222,15 +381,64 @@ export function soldes(etat: Etat): Soldes {
     etat.achats.filter((a) => a.statut === statut).reduce((s, a) => s + a.cashback, 0) +
     etat.parrainages.filter((p) => p.statut === statut).length * BONUS_PARRAINAGE;
   const verse = etat.versements.reduce((s, v) => s + v.montant, 0);
+  // « verse » regroupe tout ce qui est sorti du disponible : compte, coffre et cartes cadeaux.
   const acquis = somme('disponible') + etat.bonus.reduce((s, b) => s + b.montant, 0);
   return { enAttente: somme('en_attente'), disponible: acquis - verse, verse, totalGagne: acquis };
 }
 
-/** Verse tout le solde disponible sur le compte Parnassa. */
-export function verser(etat: Etat, t: number): Etat {
+/**
+ * Sort du solde disponible (tout, par défaut). Le compte Parnassa exige un minimum ;
+ * le coffre et les cartes cadeaux acceptent n'importe quel montant couvert par le solde.
+ */
+export function verser(etat: Etat, t: number, destination: Destination = 'compte', montant?: number): Etat {
   const { disponible } = soldes(etat);
-  if (disponible < VERSEMENT_MINIMUM) throw new Error(`Minimum de versement : ${formatEuros(VERSEMENT_MINIMUM)}`);
-  return { ...etat, versements: [{ id: nouvelId('v', t), montant: disponible, date: t }, ...etat.versements] };
+  const somme = montant ?? disponible;
+  if (!Number.isInteger(somme) || somme <= 0) throw new Error('Rien à verser');
+  if (somme > disponible) throw new Error('Solde disponible insuffisant');
+  if (destination === 'compte' && somme < VERSEMENT_MINIMUM) throw new Error(`Minimum de versement : ${formatEuros(VERSEMENT_MINIMUM)}`);
+  return { ...etat, versements: [{ id: nouvelId('v', t), montant: somme, date: t, destination }, ...etat.versements] };
+}
+
+export function soldeCoffre(etat: Etat): number {
+  const depots = etat.versements.filter((v) => v.destination === 'coffre').reduce((s, v) => s + v.montant, 0);
+  return depots - etat.coffre.retraits.reduce((s, r) => s + r.montant, 0);
+}
+
+/** Retire du coffre vers le compte Parnassa (tout, par défaut). */
+export function retirerCoffre(etat: Etat, t: number, montant?: number): Etat {
+  const solde = soldeCoffre(etat);
+  const somme = montant ?? solde;
+  if (!Number.isInteger(somme) || somme <= 0) throw new Error('Coffre vide');
+  if (somme > solde) throw new Error('Le coffre ne contient pas assez');
+  return { ...etat, coffre: { ...etat.coffre, retraits: [{ id: nouvelId('c', t), montant: somme, date: t }, ...etat.coffre.retraits] } };
+}
+
+export function reglerCoffre(etat: Etat, nom: string, objectif: number): Etat {
+  const propre = nom.trim().slice(0, 40);
+  if (!propre) throw new Error('Nom du coffre requis');
+  if (!Number.isInteger(objectif) || objectif <= 0) throw new Error('Objectif invalide');
+  return { ...etat, coffre: { ...etat.coffre, nom: propre, objectif } };
+}
+
+export function basculerFavori(etat: Etat, marchandId: string): Etat {
+  const favoris = etat.favoris.includes(marchandId) ? etat.favoris.filter((id) => id !== marchandId) : [...etat.favoris, marchandId];
+  return { ...etat, favoris };
+}
+
+export function regler(etat: Etat, changement: Partial<Reglages>): Etat {
+  const reglages = { ...etat.reglages, ...changement };
+  if (reglages.autoSeuil !== null && (!Number.isInteger(reglages.autoSeuil) || reglages.autoSeuil < VERSEMENT_MINIMUM)) {
+    throw new Error(`Seuil minimum : ${formatEuros(VERSEMENT_MINIMUM)}`);
+  }
+  return { ...etat, reglages };
+}
+
+/** Versement automatique : tout le disponible part dès que le seuil est atteint. */
+export function appliquerAutomatismes(etat: Etat, t: number): Etat {
+  const { autoSeuil, autoDestination } = etat.reglages;
+  if (autoSeuil === null) return etat;
+  const { disponible } = soldes(etat);
+  return disponible >= autoSeuil ? verser(etat, t, autoDestination) : etat;
 }
 
 /** Ajoute un bonus, une seule fois par clé. */

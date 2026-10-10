@@ -3,8 +3,9 @@ import { MARCHANDS } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
 import { avancement, defisDuMois } from '../defis';
+import { serie } from '../serie';
 
-export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: Contexte) {
+export function Accueil({ etat, t, modifier, aller, ouvrirMarchand, ouvrirUtiliser, ouvrirNotifications, nonLues }: Contexte) {
   const s = M.soldes(etat);
   const { palier, suivant, progression } = M.palierActuel(etat, t);
   const depenses = M.depenses12Mois(etat, t);
@@ -13,14 +14,20 @@ export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: 
   const defis = defisDuMois(t).map((d) => avancement(etat, d, t));
   const aRecuperer = defis.filter((a) => a.reussi && !a.reclame).length;
   const finis = defis.filter((a) => a.reclame).length;
-  const peutVerser = s.disponible >= M.VERSEMENT_MINIMUM;
+  const coffre = M.soldeCoffre(etat);
+  const sr = serie(etat, t);
 
   return (
     <>
       <section className="heros">
         <header className="entete">
           <span className="marque">Parnassa <b>Cashback</b></span>
-          <span className={`badge-palier ${palier.nom.toLowerCase()}`}>{palier.nom} · ×{palier.multiplicateur}</span>
+          <span className="rangee centre">
+            <span className={`badge-palier ${palier.nom.toLowerCase()}`}>{palier.nom} · ×{palier.multiplicateur.toLocaleString('fr-FR')}</span>
+            <button className="cloche" onClick={ouvrirNotifications} aria-label={nonLues ? `Notifications, ${nonLues} non lues` : 'Notifications'}>
+              🔔{nonLues > 0 && <span className="pastille">{nonLues > 9 ? '9+' : nonLues}</span>}
+            </button>
+          </span>
         </header>
         <p className="etiquette">Disponible</p>
         <p className="solde">{M.formatEuros(s.disponible)}</p>
@@ -28,14 +35,8 @@ export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: 
           <div><span>En attente</span><b>{M.formatEuros(s.enAttente)}</b></div>
           <div><span>Déjà versé</span><b>{M.formatEuros(s.verse)}</b></div>
         </div>
-        <button
-          className="bouton blanc"
-          disabled={!peutVerser}
-          onClick={() => {
-            if (modifier(M.verser)) signaler(`${M.formatEuros(s.disponible)} versés sur votre compte Parnassa`);
-          }}
-        >
-          {peutVerser ? 'Verser sur mon compte' : `Versement dès ${M.formatEuros(M.VERSEMENT_MINIMUM)}`}
+        <button className="bouton blanc" disabled={s.disponible <= 0} onClick={ouvrirUtiliser}>
+          Utiliser mon cashback
         </button>
       </section>
 
@@ -47,7 +48,7 @@ export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: 
         <div className="jauge"><div style={{ width: `${Math.min(100, progression * 100)}%` }} /></div>
         <p className="discret">
           {suivant
-            ? `Encore ${M.formatEuros(suivant.seuil - depenses)} pour passer ${suivant.nom} et gagner ×${suivant.multiplicateur} sur tout votre cashback.`
+            ? `Encore ${M.formatEuros(suivant.seuil - depenses)} pour passer ${suivant.nom} et gagner ×${suivant.multiplicateur.toLocaleString('fr-FR')} sur tout votre cashback.`
             : 'Palier maximum atteint : votre cashback est doublé.'}
         </p>
       </section>
@@ -77,6 +78,23 @@ export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: 
         </div>
       </section>
 
+      <div className="duo">
+        <button className="carte tuile" onClick={() => aller('profil')} aria-label={`${etat.coffre.nom} : ${M.formatEuros(coffre)}`}>
+          <span className="tuile-icone" aria-hidden>🐷</span>
+          <span className="discret">{etat.coffre.nom}</span>
+          <b>{M.formatEuros(coffre)}</b>
+          <span className="jauge fine"><span style={{ width: `${Math.min(100, (coffre / etat.coffre.objectif) * 100)}%` }} /></span>
+        </button>
+        <button className="carte tuile" onClick={() => aller('defis')} aria-label={`Série de ${sr.semaines} semaines`}>
+          <span className="tuile-icone" aria-hidden>{sr.semaines ? '🔥' : '🧊'}</span>
+          <span className="discret">Série</span>
+          <b>{sr.semaines} semaine{sr.semaines > 1 ? 's' : ''}</b>
+          <span className="petit-texte">
+            {sr.aRecuperer ? 'Récompense à récupérer !' : sr.semaineFaite ? 'Semaine validée ✓' : `Un achat partenaire avant dimanche`}
+          </span>
+        </button>
+      </div>
+
       <button className="carte resume-defis" onClick={() => aller('defis')} aria-label="Voir les défis du mois">
         <span className="defi-icone" aria-hidden>★</span>
         <span className="offre-texte">
@@ -98,22 +116,6 @@ export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: 
         <p className="discret">Hors partenaires : {M.formatTaux(M.TAUX_BASE)} sur tous vos paiements par carte.</p>
       </section>
 
-      <section className="carte demo">
-        <b>Mode démonstration</b>
-        <p className="discret">Faites avancer l'horloge pour voir le cashback se débloquer.</p>
-        <div className="rangee">
-          <button className="bouton secondaire" onClick={() => modifier((e) => M.avancerTemps(e, 7))}>+7 jours</button>
-          <button className="bouton secondaire" onClick={() => modifier((e) => M.avancerTemps(e, 30))}>+30 jours</button>
-          <button
-            className="bouton secondaire"
-            onClick={() => {
-              if (confirm('Effacer toutes les données de démonstration ?')) modifier(() => M.etatInitial());
-            }}
-          >
-            Réinitialiser
-          </button>
-        </div>
-      </section>
     </>
   );
 }

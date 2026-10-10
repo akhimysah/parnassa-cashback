@@ -1,14 +1,12 @@
-import { etatInitial, type Etat } from './moteur';
+import { etatInitial, migrer, type Etat } from './moteur';
 
 const CLE = 'parnassa-cashback:v1';
 
 export function charger(): Etat {
   try {
     const brut = localStorage.getItem(CLE);
-    if (brut) {
-      const e = JSON.parse(brut) as Etat;
-      if (e?.version === 1) return { ...e, bonus: e.bonus ?? [] };
-    }
+    const e = brut ? migrer(JSON.parse(brut)) : null;
+    if (e) return e;
   } catch {
     // Stockage indisponible (navigation privée) : on repart d'un état neuf.
   }
