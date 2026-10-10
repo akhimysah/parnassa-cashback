@@ -28,7 +28,8 @@ function moisPrecedent(cle: string): string {
   return cleMois(new Date(a, m - 2, 15).getTime());
 }
 
-function gainsDu(etat: Etat, cle: string): number {
+/** Cashback (hors annulés), bonus et parrainages d'un mois « AAAA-MM ». */
+export function gainsDu(etat: Etat, cle: string): number {
   return (
     etat.achats.filter((a) => a.statut !== 'annule' && cleMois(a.date) === cle).reduce((s, a) => s + a.cashback, 0) +
     etat.bonus.filter((b) => cleMois(b.date) === cle).reduce((s, b) => s + b.montant, 0) +

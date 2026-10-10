@@ -26,7 +26,11 @@ export interface Achat {
   date: number;
   disponibleLe: number;
   statut: Statut;
+  /** Paiement dans une boutique physique (taux « en magasin », sans boost ni flash). Absent = en ligne. */
+  canal?: 'magasin';
 }
+
+export type Canal = 'en_ligne' | 'magasin';
 
 export interface Parrainage {
   id: string;
@@ -101,6 +105,8 @@ export interface Reglages {
   autoSeuil: number | null;
   autoDestination: 'compte' | 'coffre';
   notifications: boolean;
+  /** Objectif de cashback par mois (centimes) ; null = pas d'objectif. */
+  objectifMensuel: number | null;
 }
 
 export interface Etat {
@@ -163,7 +169,7 @@ function champsParDefaut() {
     coffre: { nom: 'Mon coffre', objectif: 20_000, retraits: [] } as Coffre,
     cartes: [] as CarteCadeau[],
     reclamations: [] as Reclamation[],
-    reglages: { theme: 'auto', autoSeuil: null, autoDestination: 'compte', notifications: false } as Reglages,
+    reglages: { theme: 'auto', autoSeuil: null, autoDestination: 'compte', notifications: false, objectifMensuel: null } as Reglages,
     notificationsLues: 0,
     notificationsEnvoyees: 0,
     succes: {} as Record<string, number>,
@@ -296,10 +302,20 @@ export function tauxEffectif(etat: Etat, marchandId: string | null, t: number): 
   return tauxMarchand(marchand.id, t) * multiplicateur;
 }
 
-export function calculerCashback(etat: Etat, marchandId: string | null, montant: number, t: number): number {
+/** Taux en boutique physique (en %), palier compris ; null si le marchand n'a pas de magasin. */
+export function tauxEnMagasin(etat: Etat, marchandId: string, t: number): number | null {
+  const marchand = trouverMarchand(marchandId);
+  if (!marchand?.enMagasin) return null;
+  const { multiplicateur } = palierActuel(etat, t).palier;
+  return etat.offresActivees.includes(marchand.id) ? marchand.enMagasin * multiplicateur : TAUX_BASE * multiplicateur;
+}
+
+export function calculerCashback(etat: Etat, marchandId: string | null, montant: number, t: number, canal: Canal = 'en_ligne'): number {
   if (!Number.isFinite(montant) || montant <= 0) return 0;
   const marchand = trouverMarchand(marchandId);
-  const brut = Math.floor((montant * tauxEffectif(etat, marchandId, t)) / 100);
+  const taux = canal === 'magasin' && marchandId ? tauxEnMagasin(etat, marchandId, t) : tauxEffectif(etat, marchandId, t);
+  if (taux === null) throw new Error("Ce marchand n'a pas de magasin");
+  const brut = Math.floor((montant * taux) / 100);
   const actif = marchand && etat.offresActivees.includes(marchand.id);
   return actif && marchand.plafond !== undefined ? Math.min(brut, marchand.plafond) : brut;
 }
@@ -317,7 +333,7 @@ export function basculerOffre(etat: Etat, marchandId: string): Etat {
   return { ...etat, offresActivees: actives };
 }
 
-export function enregistrerAchat(etat: Etat, marchandId: string | null, montant: number, t: number, libelle?: string): Etat {
+export function enregistrerAchat(etat: Etat, marchandId: string | null, montant: number, t: number, libelle?: string, canal: Canal = 'en_ligne'): Etat {
   if (!Number.isInteger(montant) || montant <= 0) throw new Error('Montant invalide');
   const marchand = trouverMarchand(marchandId);
   const actif = marchand && etat.offresActivees.includes(marchand.id);
@@ -327,10 +343,11 @@ export function enregistrerAchat(etat: Etat, marchandId: string | null, montant:
     marchandId: actif ? marchand.id : null,
     libelle: libelle ?? marchand?.nom ?? 'Paiement par carte',
     montant,
-    cashback: calculerCashback(etat, marchandId, montant, t),
+    cashback: calculerCashback(etat, marchandId, montant, t, canal),
     date: t,
     disponibleLe: t + delai * JOUR,
     statut: 'en_attente',
+    ...(canal === 'magasin' ? { canal } : {}),
   };
   return { ...etat, achats: [achat, ...etat.achats] };
 }
@@ -477,6 +494,9 @@ export function regler(etat: Etat, changement: Partial<Reglages>): Etat {
   const reglages = { ...etat.reglages, ...changement };
   if (reglages.autoSeuil !== null && (!Number.isInteger(reglages.autoSeuil) || reglages.autoSeuil < VERSEMENT_MINIMUM)) {
     throw new Error(`Seuil minimum : ${formatEuros(VERSEMENT_MINIMUM)}`);
+  }
+  if (reglages.objectifMensuel !== null && (!Number.isInteger(reglages.objectifMensuel) || reglages.objectifMensuel <= 0)) {
+    throw new Error('Objectif invalide');
   }
   return { ...etat, reglages };
 }

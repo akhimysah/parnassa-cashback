@@ -3,6 +3,7 @@ import { MARCHANDS } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
 import { Flash } from './Flash';
+import { Objectif } from './Objectif';
 import { avancement, defisDuMois } from '../defis';
 import { serie } from '../serie';
 
@@ -43,6 +44,8 @@ export function Accueil(ctx: Contexte) {
       </section>
 
       <Flash {...ctx} />
+
+      <Objectif {...ctx} />
 
       <section className="carte">
         <div className="ligne-titre">

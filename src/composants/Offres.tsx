@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { Contexte } from '../App';
 import { CATEGORIES, MARCHANDS, type Categorie } from '../marchands';
 import * as M from '../moteur';
@@ -7,7 +7,33 @@ import { Logo } from './Logo';
 type Filtre = Categorie | 'Activées' | 'Promos' | 'Favoris' | null;
 type Tri = 'taux' | 'nom' | 'delai';
 
-export function Offres({ etat, t, modifier, signaler, ouvrirMarchand, ouvrirSimulateur }: Contexte) {
+// La carte (Leaflet) n'est chargée qu'à la première ouverture de « Près de moi ».
+const PresDeMoi = lazy(() => import('./PresDeMoi'));
+
+export function Offres(ctx: Contexte) {
+  const [vue, setVue] = useState<'en-ligne' | 'magasins'>('en-ligne');
+  return (
+    <>
+      <h1>Offres partenaires</h1>
+      <div className="segments" role="tablist">
+        {(['en-ligne', 'magasins'] as const).map((v) => (
+          <button key={v} role="tab" aria-selected={vue === v} className={vue === v ? 'actif' : ''} onClick={() => setVue(v)}>
+            {v === 'en-ligne' ? 'En ligne' : '📍 Près de moi'}
+          </button>
+        ))}
+      </div>
+      {vue === 'en-ligne' ? (
+        <EnLigne {...ctx} />
+      ) : (
+        <Suspense fallback={<p className="vide">Chargement de la carte…</p>}>
+          <PresDeMoi {...ctx} />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
+function EnLigne({ etat, t, modifier, signaler, ouvrirMarchand, ouvrirSimulateur }: Contexte) {
   const [recherche, setRecherche] = useState('');
   const [filtre, setFiltre] = useState<Filtre>(null);
   const [tri, setTri] = useState<Tri>('taux');
@@ -33,7 +59,6 @@ export function Offres({ etat, t, modifier, signaler, ouvrirMarchand, ouvrirSimu
 
   return (
     <>
-      <h1>Offres partenaires</h1>
       <button className="carte resume-defis simulateur-entree" onClick={ouvrirSimulateur}>
         <span className="defi-icone" aria-hidden>🧮</span>
         <span className="offre-texte">

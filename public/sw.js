@@ -1,5 +1,5 @@
 /* Service worker de Parnassa Cashback : application installable et démarrage hors ligne. */
-const VERSION = 'parnassa-cashback-v4';
+const VERSION = 'parnassa-cashback-v5';
 const COQUILLE = ['./', './index.html', './manifest.webmanifest', './icone.svg', './icone-192.png', './icone-512.png'];
 
 self.addEventListener('install', (e) => {

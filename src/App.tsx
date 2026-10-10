@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { charger, sauver } from './etat';
 import * as M from './moteur';
 import { evenements, nonLues } from './notifications';
@@ -11,9 +11,10 @@ import { FicheMarchand } from './composants/FicheMarchand';
 import { Notifications } from './composants/Notifications';
 import { Utiliser } from './composants/Utiliser';
 import { Bienvenue } from './composants/Bienvenue';
-import { Recap } from './composants/Recap';
-import { Simulateur } from './composants/Simulateur';
-import { Boutique } from './composants/Boutique';
+// Panneaux ouverts à la demande : chargés seulement au premier usage.
+const Recap = lazy(() => import('./composants/Recap').then((m) => ({ default: m.Recap })));
+const Simulateur = lazy(() => import('./composants/Simulateur').then((m) => ({ default: m.Simulateur })));
+const Boutique = lazy(() => import('./composants/Boutique').then((m) => ({ default: m.Boutique })));
 import { debloquerSucces, trouverSucces } from './succes';
 
 export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
@@ -179,9 +180,11 @@ export function App() {
       {panneau?.type === 'marchand' && <FicheMarchand key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
       {panneau?.type === 'utiliser' && <Utiliser fermer={fermer} {...ctx} />}
       {panneau?.type === 'notifications' && <Notifications fermer={fermer} {...ctx} />}
-      {panneau?.type === 'recap' && <Recap cle={panneau.cle} fermer={fermer} {...ctx} />}
-      {panneau?.type === 'simulateur' && <Simulateur fermer={fermer} {...ctx} />}
-      {panneau?.type === 'boutique' && <Boutique key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
+      <Suspense fallback={null}>
+        {panneau?.type === 'recap' && <Recap cle={panneau.cle} fermer={fermer} {...ctx} />}
+        {panneau?.type === 'simulateur' && <Simulateur fermer={fermer} {...ctx} />}
+        {panneau?.type === 'boutique' && <Boutique key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
+      </Suspense>
       {!etat.accueilVu && <Bienvenue terminer={() => setEtat((e) => ({ ...e, accueilVu: true }))} />}
       {message && <div className="toast" role="status">{message}</div>}
     </div>
