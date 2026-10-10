@@ -3,8 +3,11 @@
 import { avancement, defisDuMois } from './defis';
 import { trouverMarchand } from './marchands';
 import type { SousProfil } from './App';
-import { BONUS_PARRAINAGE, boostsDeLaSemaine, finDeSemaine, formatEuros, formatTaux, palierActuel, SEMAINE, tauxMarchand, type Etat } from './moteur';
+import { BONUS_PARRAINAGE, boostsDeLaSemaine, debutJour, offreFlash, finDeSemaine, formatEuros, formatTaux, palierActuel, SEMAINE, tauxMarchand, type Etat } from './moteur';
 import { serie } from './serie';
+import { trouverSucces } from './succes';
+import { moisActifs } from './recap';
+import { cleMois, debutMois } from './defis';
 
 export interface Evenement {
   id: string;
@@ -12,9 +15,14 @@ export interface Evenement {
   icone: string;
   titre: string;
   texte: string;
-  /** Onglet à ouvrir quand on touche l'événement. */
-  cible: 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
+  /** Onglet à ouvrir quand on touche l'événement (« recap » ouvre le récap du mois précédent). */
+  cible: 'accueil' | 'offres' | 'defis' | 'activite' | 'profil' | 'recap';
   sous?: SousProfil;
+}
+
+/** « de Miam Express », « d’Éclat Beauté ». */
+export function de(nom: string): string {
+  return /^[aeiouyàâéèêëîïôöûü]/i.test(nom) ? `d’${nom}` : `de ${nom}`;
 }
 
 export function evenements(etat: Etat, t: number): Evenement[] {
@@ -22,7 +30,7 @@ export function evenements(etat: Etat, t: number): Evenement[] {
 
   for (const a of etat.achats) {
     if (a.statut === 'disponible' && a.disponibleLe <= t && !a.id.endsWith('-achat')) {
-      liste.push({ id: `dispo:${a.id}`, date: a.disponibleLe, icone: '✅', titre: 'Cashback disponible', texte: `${formatEuros(a.cashback)} de ${a.libelle} peuvent être versés.`, cible: 'accueil' });
+      liste.push({ id: `dispo:${a.id}`, date: a.disponibleLe, icone: '✅', titre: 'Cashback disponible', texte: `${formatEuros(a.cashback)} ${de(a.libelle)} peuvent être versés.`, cible: 'accueil' });
     }
   }
   for (const p of etat.parrainages) {
@@ -39,6 +47,22 @@ export function evenements(etat: Etat, t: number): Evenement[] {
         : { id: `recl:${r.id}`, date: r.decisionLe, icone: '📨', titre: 'Réclamation refusée', texte: `${nom} : ${r.motif ?? 'achat non retrouvé.'}`, cible: 'profil', sous: 'reclamations' },
     );
   }
+
+  for (const [id, date] of Object.entries(etat.succes)) {
+    const s = trouverSucces(id);
+    if (s) liste.push({ id: `succes:${id}`, date, icone: s.icone, titre: `Succès débloqué : ${s.titre}`, texte: s.description, cible: 'defis' });
+  }
+
+  // Le 1er du mois, le récap du mois écoulé s'il a eu de l'activité.
+  const debut = debutMois(t);
+  const precedent = cleMois(debut - 1);
+  if (moisActifs(etat).includes(precedent)) {
+    liste.push({ id: `recap:${precedent}`, date: debut, icone: '📊', titre: 'Votre récap est prêt', texte: 'Découvrez votre mois en chiffres.', cible: 'recap' });
+  }
+
+  // Offre flash du jour, annoncée à minuit.
+  const flash = offreFlash(t);
+  liste.push({ id: `flash:${flash.fin}`, date: debutJour(t), icone: '⏱️', titre: 'Offre flash du jour', texte: `${trouverMarchand(flash.marchandId)?.nom} : ${formatTaux(flash.taux * palierActuel(etat, t).palier.multiplicateur)} jusqu'à minuit.`, cible: 'offres' });
 
   // Boosts de la semaine en cours, annoncés le lundi.
   const lundi = finDeSemaine(t) - SEMAINE;

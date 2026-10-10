@@ -2,10 +2,12 @@ import type { Contexte } from '../App';
 import { MARCHANDS } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
+import { Flash } from './Flash';
 import { avancement, defisDuMois } from '../defis';
 import { serie } from '../serie';
 
-export function Accueil({ etat, t, modifier, aller, ouvrirMarchand, ouvrirUtiliser, ouvrirNotifications, nonLues }: Contexte) {
+export function Accueil(ctx: Contexte) {
+  const { etat, t, modifier, aller, ouvrirMarchand, ouvrirUtiliser, ouvrirNotifications, nonLues } = ctx;
   const s = M.soldes(etat);
   const { palier, suivant, progression } = M.palierActuel(etat, t);
   const depenses = M.depenses12Mois(etat, t);
@@ -39,6 +41,8 @@ export function Accueil({ etat, t, modifier, aller, ouvrirMarchand, ouvrirUtilis
           Utiliser mon cashback
         </button>
       </section>
+
+      <Flash {...ctx} />
 
       <section className="carte">
         <div className="ligne-titre">

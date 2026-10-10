@@ -11,6 +11,9 @@ import { FicheMarchand } from './composants/FicheMarchand';
 import { Notifications } from './composants/Notifications';
 import { Utiliser } from './composants/Utiliser';
 import { Bienvenue } from './composants/Bienvenue';
+import { Recap } from './composants/Recap';
+import { Simulateur } from './composants/Simulateur';
+import { debloquerSucces, trouverSucces } from './succes';
 
 export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
 export type SousProfil = 'menu' | 'coffre' | 'cartes' | 'reclamations' | 'parrainage' | 'reglages';
@@ -35,10 +38,19 @@ export interface Contexte {
   ouvrirMarchand: (id: string) => void;
   ouvrirUtiliser: () => void;
   ouvrirNotifications: () => void;
+  /** Récap d'un mois (« 2026-10 ») ; par défaut le plus récent avec de l'activité. */
+  ouvrirRecap: (cle?: string) => void;
+  ouvrirSimulateur: () => void;
   nonLues: number;
 }
 
-type Panneau = { type: 'marchand'; id: string } | { type: 'utiliser' } | { type: 'notifications' } | null;
+type Panneau =
+  | { type: 'marchand'; id: string }
+  | { type: 'utiliser' }
+  | { type: 'notifications' }
+  | { type: 'recap'; cle?: string }
+  | { type: 'simulateur' }
+  | null;
 
 export function App() {
   const [etat, setEtat] = useState(charger);
@@ -67,6 +79,13 @@ export function App() {
       }
     } catch {
       // Seuil devenu invalide : on laisse le disponible en place.
+    }
+    const avantSucces = suivant;
+    suivant = debloquerSucces(suivant, t);
+    if (suivant !== avantSucces) {
+      const nouveaux = Object.keys(suivant.succes).filter((id) => !(id in avantSucces.succes));
+      // Au premier chargement d'un état ancien, plusieurs succès tombent d'un coup : un seul message.
+      setMessage(nouveaux.length === 1 ? `${trouverSucces(nouveaux[0])?.icone} Succès débloqué : ${trouverSucces(nouveaux[0])?.titre}` : `🏅 ${nouveaux.length} succès débloqués`);
     }
     if (suivant !== etat) setEtat(suivant);
   }, [etat, t]);
@@ -126,6 +145,8 @@ export function App() {
       ouvrirMarchand: (id) => setPanneau({ type: 'marchand', id }),
       ouvrirUtiliser: () => setPanneau({ type: 'utiliser' }),
       ouvrirNotifications: () => setPanneau({ type: 'notifications' }),
+      ouvrirRecap: (cle) => setPanneau({ type: 'recap', cle }),
+      ouvrirSimulateur: () => setPanneau({ type: 'simulateur' }),
       nonLues: nbNonLues,
       sousProfil,
     }),
@@ -153,6 +174,8 @@ export function App() {
       {panneau?.type === 'marchand' && <FicheMarchand key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
       {panneau?.type === 'utiliser' && <Utiliser fermer={fermer} {...ctx} />}
       {panneau?.type === 'notifications' && <Notifications fermer={fermer} {...ctx} />}
+      {panneau?.type === 'recap' && <Recap cle={panneau.cle} fermer={fermer} {...ctx} />}
+      {panneau?.type === 'simulateur' && <Simulateur fermer={fermer} {...ctx} />}
       {!etat.accueilVu && <Bienvenue terminer={() => setEtat((e) => ({ ...e, accueilVu: true }))} />}
       {message && <div className="toast" role="status">{message}</div>}
     </div>

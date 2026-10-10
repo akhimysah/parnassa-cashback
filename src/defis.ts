@@ -1,7 +1,7 @@
 // Défis du mois : trois missions tirées chaque mois parmi un catalogue, récompensées par un bonus.
 
 import { trouverMarchand, type Categorie } from './marchands';
-import { crediterBonus, type Achat, type Etat } from './moteur';
+import { aleaSuivant, crediterBonus, graineDe, indiceAlea, type Achat, type Etat } from './moteur';
 
 type Condition =
   | { type: 'achats'; n: number; categorie?: Categorie; partenaires?: boolean }
@@ -49,12 +49,12 @@ export function finMois(t: number): number {
 
 export function defisDuMois(t: number): Defi[] {
   const [a, m] = cleMois(t).split('-').map(Number);
-  let graine = a * 12 + m;
+  let graine = graineDe(a * 12 + m);
   const restants = [...CATALOGUE];
   const choisis: Defi[] = [];
   while (choisis.length < DEFIS_PAR_MOIS) {
-    graine = (graine * 1103515245 + 12345) % 2147483648;
-    choisis.push(restants.splice(graine % restants.length, 1)[0]);
+    graine = aleaSuivant(graine);
+    choisis.push(restants.splice(indiceAlea(graine, restants.length), 1)[0]);
   }
   return choisis;
 }

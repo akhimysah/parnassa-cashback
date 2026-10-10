@@ -13,7 +13,7 @@ function depuis(date: number, t: number): string {
   return quand.format(Math.round(heures / 24), 'day');
 }
 
-export function Notifications({ fermer, etat, t, modifier, aller }: Contexte & { fermer: () => void }) {
+export function Notifications({ fermer, etat, t, modifier, aller, ouvrirRecap }: Contexte & { fermer: () => void }) {
   const liste = evenements(etat, t);
   // Ce qui était non lu à l'ouverture reste en évidence tant que le panneau est ouvert.
   const [vuJusqua] = useState(etat.notificationsLues);
@@ -31,6 +31,7 @@ export function Notifications({ fermer, etat, t, modifier, aller }: Contexte & {
             <button
               className={`notif ${ev.date > vuJusqua ? 'nouvelle' : ''}`}
               onClick={() => {
+                if (ev.cible === 'recap') return ouvrirRecap(ev.id.slice('recap:'.length));
                 aller(ev.cible, ev.sous);
                 fermer();
               }}

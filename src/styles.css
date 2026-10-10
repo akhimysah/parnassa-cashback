@@ -324,3 +324,57 @@ h2 { font-size: 17px; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Offre flash */
+.flash {
+  border-radius: 22px; padding: 16px; color: #fff; display: flex; flex-direction: column; gap: 12px;
+  background: radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--teinte) 70%, transparent), transparent 60%), linear-gradient(135deg, #f97316, #db2777 55%, #7c3aed);
+  box-shadow: 0 10px 30px -12px rgba(219, 39, 119, .55);
+}
+.flash-etiquette { font-weight: 800; letter-spacing: .02em; text-transform: uppercase; font-size: 13px; }
+.flash-chrono { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; background: rgba(0,0,0,.22); padding: 4px 10px; border-radius: 99px; }
+.flash-marchand { display: flex; align-items: center; gap: 12px; border: 0; background: none; color: inherit; text-align: left; padding: 0; }
+.flash-marchand b { font-size: 19px; }
+.flash-marchand .logo { box-shadow: 0 0 0 3px rgba(255,255,255,.45); }
+.flash-taux { font-size: 26px; font-weight: 800; }
+.flash-taux s { font-size: 15px; font-weight: 500; opacity: .75; }
+.flash .bouton.secondaire { background: rgba(255,255,255,.2); color: #fff; }
+
+/* Récap */
+.recap-nav { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; text-align: center; }
+.recap-mois { text-transform: capitalize; }
+.recap-carte {
+  border-radius: 22px; padding: 20px; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  background: radial-gradient(120% 90% at 0% 0%, #ec4899 0%, transparent 55%), linear-gradient(160deg, var(--violet) 0%, var(--violet-fonce) 100%);
+}
+.recap-carte .etiquette { color: #fff; }
+.recap-total { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.recap-carte.compacte .recap-total { font-size: 40px; }
+.recap-evolution { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: rgba(255,255,255,.18); }
+.recap-evolution.baisse { background: rgba(0,0,0,.2); }
+.recap-grille { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; margin-top: 14px; }
+.recap-grille div { background: rgba(255,255,255,.12); border-radius: 12px; padding: 8px 4px; display: flex; flex-direction: column; }
+.recap-grille b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.recap-grille span { font-size: 11px; opacity: .8; }
+.recap-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.recap-points li { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+
+/* Simulateur */
+.curseurs { display: flex; flex-direction: column; gap: 14px; max-height: 46dvh; overflow-y: auto; padding-right: 4px; }
+.curseur { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.curseur .lien { align-self: flex-start; padding: 0; font-weight: 500; }
+input[type='range'] { width: 100%; accent-color: var(--violet); }
+
+/* Succès */
+.grille-succes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.badge { background: var(--surface); border: 1px solid var(--bord); border-radius: 18px; padding: 14px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.badge-icone { font-size: 34px; filter: grayscale(1); opacity: .45; }
+.badge.obtenu { border-color: color-mix(in srgb, #f59e0b 55%, var(--bord)); background-image: linear-gradient(180deg, color-mix(in srgb, #f59e0b 14%, transparent), transparent 70%); }
+.badge.obtenu .badge-icone { filter: none; opacity: 1; }
+.badge .jauge { width: 100%; display: block; margin-top: 4px; }
+
+/* Restauration */
+.fichier { position: relative; text-align: center; cursor: pointer; }
+.fichier input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.fichier:focus-within { outline: 2px solid var(--accent-texte); outline-offset: 2px; }
+.recap-nav .puce { min-width: 44px; font-size: 20px; line-height: 1; padding: 6px 0; }

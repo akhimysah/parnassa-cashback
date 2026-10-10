@@ -44,6 +44,7 @@ export function FicheMarchand({ id, fermer, etat, t, modifier, signaler }: Conte
           de cashback
           {palier.multiplicateur > 1 && ` (palier ${palier.nom} ×${palier.multiplicateur.toLocaleString('fr-FR')})`}
         </span>
+        {M.offreFlash(t).marchandId === m.id && <p className="bandeau-boost">⏱️ Offre flash : ×{M.COEF_FLASH} jusqu'à minuit</p>}
         {booste && <p className="bandeau-boost">⚡ Boost ×{M.COEF_BOOST.toLocaleString('fr-FR')} jusqu'au {jour.format(M.finDeSemaine(t) - 1)}</p>}
       </div>
 

@@ -4,6 +4,7 @@ import { MARCHANDS, trouverMarchand } from '../marchands';
 import * as M from '../moteur';
 import { marquerCarte } from '../cartes';
 import { historiqueCsv, telecharger } from '../exporter';
+import { exporterSauvegarde, lireSauvegarde } from '../sauvegarde';
 import { Logo } from './Logo';
 import { Parrainer } from './Parrainer';
 
@@ -320,6 +321,34 @@ function Reglages({ etat, modifier, signaler }: Contexte) {
         <button className="bouton secondaire" onClick={() => telecharger(`parnassa-cashback-${new Date().toISOString().slice(0, 10)}.csv`, historiqueCsv(etat))}>
           Exporter l'historique (CSV)
         </button>
+        <div className="rangee">
+          <button className="bouton secondaire" onClick={() => telecharger(`parnassa-cashback-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`, exporterSauvegarde(etat, Date.now()), 'application/json')}>
+            Sauvegarder
+          </button>
+          <label className="bouton secondaire fichier">
+            Restaurer…
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={async (e) => {
+                const fichier = e.target.files?.[0];
+                e.target.value = '';
+                if (!fichier) return;
+                try {
+                  const restaure = lireSauvegarde(await fichier.text());
+                  const n = restaure.achats.length;
+                  if (confirm(`Remplacer toutes les données de cet appareil par la sauvegarde (${n} achat${n > 1 ? 's' : ''}) ?`)) {
+                    modifier(() => restaure);
+                    signaler('Sauvegarde restaurée');
+                  }
+                } catch (err) {
+                  signaler((err as Error).message);
+                }
+              }}
+            />
+          </label>
+        </div>
+        <p className="petit-texte">La sauvegarde permet de retrouver vos données sur un autre appareil ou navigateur.</p>
       </section>
     </>
   );

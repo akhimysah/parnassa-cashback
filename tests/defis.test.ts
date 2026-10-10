@@ -8,6 +8,12 @@ const neuf = () => M.etatInitial(() => 0.5);
 const defi = (id: string) => CATALOGUE.find((d) => d.id === id)!;
 
 describe('défis du mois', () => {
+  it('varie d’un mois à l’autre', () => {
+    const tirages = new Set<string>();
+    for (let m = 0; m < 24; m++) tirages.add(defisDuMois(new Date(2026, m, 10).getTime()).map((d) => d.id).sort().join());
+    expect(tirages.size).toBeGreaterThan(8);
+  });
+
   it('tire trois défis distincts, identiques tout le mois', () => {
     const d = defisDuMois(T).map((x) => x.id);
     expect(new Set(d).size).toBe(DEFIS_PAR_MOIS);

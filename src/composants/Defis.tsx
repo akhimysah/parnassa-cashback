@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import type { Contexte } from '../App';
+import { Succes } from './Succes';
 import { avancement, defisDuMois, finMois, reclamerDefi } from '../defis';
 import * as M from '../moteur';
 import { BONUS_SERIE, PALIER_SERIE, recupererSerie, serie } from '../serie';
 
 const mois = new Intl.DateTimeFormat('fr-FR', { month: 'long' });
 
-export function Defis({ etat, t, modifier, signaler }: Contexte) {
+function DefisDuMois({ etat, t, modifier, signaler }: Contexte) {
   const liste = defisDuMois(t).map((d) => avancement(etat, d, t));
   const restant = Math.ceil((finMois(t) - t) / M.JOUR);
   const gagnes = etat.bonus.reduce((s, b) => s + b.montant, 0);
@@ -15,7 +17,6 @@ export function Defis({ etat, t, modifier, signaler }: Contexte) {
 
   return (
     <>
-      <h1>Défis {/^[aeiou]/.test(mois.format(t)) ? 'd’' : 'de '}{mois.format(t)}</h1>
       <p className="discret">
         Encore {restant} jour{restant > 1 ? 's' : ''} pour les relever. De nouveaux défis chaque mois.
         {gagnes > 0 && ` Vous avez déjà gagné ${M.formatEuros(gagnes)} en défis.`}
@@ -79,6 +80,24 @@ export function Defis({ etat, t, modifier, signaler }: Contexte) {
           );
         })}
       </ul>
+    </>
+  );
+}
+
+export function Defis(ctx: Contexte) {
+  const [vue, setVue] = useState<'defis' | 'succes'>('defis');
+  const nomMois = mois.format(ctx.t);
+  return (
+    <>
+      <h1>{vue === 'defis' ? `Défis ${/^[aeiou]/.test(nomMois) ? 'd’' : 'de '}${nomMois}` : 'Succès'}</h1>
+      <div className="segments" role="tablist">
+        {(['defis', 'succes'] as const).map((v) => (
+          <button key={v} role="tab" aria-selected={vue === v} className={vue === v ? 'actif' : ''} onClick={() => setVue(v)}>
+            {v === 'defis' ? 'Défis et série' : 'Succès'}
+          </button>
+        ))}
+      </div>
+      {vue === 'defis' ? <DefisDuMois {...ctx} /> : <Succes {...ctx} />}
     </>
   );
 }

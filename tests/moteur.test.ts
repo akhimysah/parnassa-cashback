@@ -5,7 +5,8 @@ import { MARCHANDS } from '../src/marchands';
 const BASE = Date.UTC(2026, 9, 10);
 const SANS_BOOST = ['atelier-nord', 'miam', 'table-ronde'];
 let T0 = BASE;
-while (M.boostsDeLaSemaine(T0).some((id) => SANS_BOOST.includes(id))) T0 += M.SEMAINE;
+const promu = (t: number) => [...M.boostsDeLaSemaine(t), M.offreFlash(t).marchandId];
+while (promu(T0).some((id) => SANS_BOOST.includes(id))) T0 += M.JOUR;
 const neuf = () => M.etatInitial(() => 0.5);
 
 describe('calcul du cashback', () => {
@@ -121,5 +122,33 @@ describe('bonus', () => {
     expect(() => M.crediterBonus(e, '2026-10:x', 'Défi', 500, T0)).toThrow();
     e = M.crediterBonus(e, '2026-11:x', 'Défi', 500, T0);
     expect(M.soldes(e).disponible).toBe(1000);
+  });
+});
+
+describe('offre flash du jour', () => {
+  it('double le taux d’un marchand non boosté, jusqu’à minuit', () => {
+    const f = M.offreFlash(T0);
+    const m = MARCHANDS.find((x) => x.id === f.marchandId)!;
+    expect(M.boostsDeLaSemaine(T0)).not.toContain(f.marchandId);
+    expect(f.taux).toBe(Math.min(m.taux * 2, Math.max(m.taux, M.TAUX_FLASH_MAX)));
+    expect(M.tauxMarchand(f.marchandId, T0)).toBe(f.taux);
+    expect(f.fin).toBe(M.finJour(T0));
+    expect(M.offreFlash(f.fin - 1).marchandId).toBe(f.marchandId);
+    expect(M.offreFlash(M.debutJour(T0)).marchandId).toBe(f.marchandId);
+  });
+
+  it('change de marchand selon les jours', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 30; i++) ids.add(M.offreFlash(T0 + i * M.JOUR).marchandId);
+    expect(ids.size).toBeGreaterThan(6);
+  });
+
+  it('ne dépasse jamais le plafond flash, sauf si le taux normal est déjà plus haut', () => {
+    for (let i = 0; i < 60; i++) {
+      const f = M.offreFlash(T0 + i * M.JOUR);
+      const m = MARCHANDS.find((x) => x.id === f.marchandId)!;
+      expect(f.taux).toBeLessThanOrEqual(Math.max(M.TAUX_FLASH_MAX, m.taux));
+      expect(f.taux).toBeGreaterThanOrEqual(m.taux);
+    }
   });
 });

@@ -2,7 +2,7 @@ import type { Contexte } from '../App';
 import * as M from '../moteur';
 import { gainsParCategorie, gainsParMois } from '../statistiques';
 
-export function Statistiques({ etat, t }: Contexte) {
+export function Statistiques({ etat, t, ouvrirRecap }: Contexte) {
   const mois = gainsParMois(etat, t, 6);
   const max = Math.max(1, ...mois.map((m) => m.cashback + m.bonus));
   const categories = gainsParCategorie(etat);
@@ -18,6 +18,15 @@ export function Statistiques({ etat, t }: Contexte) {
         <div><span>Gagné au total</span><b>{M.formatEuros(s.totalGagne + s.enAttente)}</b></div>
         <div><span>Taux moyen</span><b>{M.formatTaux(tauxMoyen)}</b></div>
       </div>
+
+      <button className="carte resume-defis" onClick={() => ouvrirRecap()} aria-label="Voir mon récap mensuel">
+        <span className="defi-icone" aria-hidden>📊</span>
+        <span className="offre-texte">
+          <b>Mon récap mensuel</b>
+          <span className="discret">Le mois en chiffres, à partager</span>
+        </span>
+        <span aria-hidden>›</span>
+      </button>
 
       <section className="carte">
         <div className="ligne-titre">

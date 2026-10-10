@@ -121,6 +121,8 @@ export interface Etat {
   /** Date du dernier événement signalé par une notification du navigateur. */
   notificationsEnvoyees: number;
   accueilVu: boolean;
+  /** Succès débloqués : identifiant → date du déblocage. */
+  succes: Record<string, number>;
   /** Décalage de l'horloge pour la démonstration (« avancer le temps »). */
   decalage: number;
 }
@@ -164,6 +166,7 @@ function champsParDefaut() {
     reglages: { theme: 'auto', autoSeuil: null, autoDestination: 'compte', notifications: false } as Reglages,
     notificationsLues: 0,
     notificationsEnvoyees: 0,
+    succes: {} as Record<string, number>,
   };
 }
 
@@ -181,6 +184,7 @@ export function migrer(brut: unknown): Etat | null {
     versements: (e.versements ?? []).map((v) => ({ ...v, destination: v.destination ?? 'compte' })),
     coffre: { ...defaut.coffre, ...e.coffre },
     reglages: { ...defaut.reglages, ...e.reglages },
+    succes: { ...e.succes },
   } as Etat;
 }
 
@@ -205,6 +209,21 @@ export function palierActuel(etat: Etat, t: number): { palier: Palier; suivant?:
 }
 
 export const SEMAINE = 7 * JOUR;
+
+/** Générateur congruentiel sur 31 bits, en arithmétique entière exacte (Math.imul). */
+export function aleaSuivant(graine: number): number {
+  return (Math.imul(graine, 1103515245) + 12345) & 0x7fffffff;
+}
+
+/** Indice dans [0, n) tiré des bits de poids fort (les bits faibles d'un générateur congruentiel varient peu). */
+export function indiceAlea(graine: number, n: number): number {
+  return Math.floor((graine / 0x80000000) * n);
+}
+
+/** Graine entière à partir d'un nombre quelconque (numéro de semaine, de jour…). */
+export function graineDe(n: number): number {
+  return Math.imul(n | 0, 0x9e3779b1) & 0x7fffffff;
+}
 export const COEF_BOOST = 1.5;
 export const BOOSTS_PAR_SEMAINE = 2;
 
@@ -223,20 +242,49 @@ export function numeroSemaine(t: number): number {
 
 /** Marchands boostés cette semaine : tirage déterministe, identique pour tout le monde. */
 export function boostsDeLaSemaine(t: number): string[] {
-  let graine = numeroSemaine(t) * 2654435761;
+  let graine = graineDe(numeroSemaine(t));
   const restants = MARCHANDS.map((m) => m.id);
   const choisis: string[] = [];
   while (choisis.length < BOOSTS_PAR_SEMAINE && restants.length) {
-    graine = (graine * 1103515245 + 12345) % 2147483648;
-    choisis.push(restants.splice(graine % restants.length, 1)[0]);
+    graine = aleaSuivant(graine);
+    choisis.push(restants.splice(indiceAlea(graine, restants.length), 1)[0]);
   }
   return choisis;
 }
 
-/** Taux partenaire (en %) avant palier, boost compris. */
+export const COEF_FLASH = 2;
+/** Le taux d'une offre flash ne dépasse jamais ce plafond (en %). */
+export const TAUX_FLASH_MAX = 20;
+
+/** Minuit (heure locale) du jour de `t`. */
+export function debutJour(t: number): number {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function finJour(t: number): number {
+  const d = new Date(debutJour(t));
+  d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
+/** Offre flash du jour : un marchand non boosté cette semaine, cashback doublé jusqu'à minuit. */
+export function offreFlash(t: number): { marchandId: string; taux: number; fin: number } {
+  const d = new Date(t);
+  const graine = aleaSuivant(graineDe(d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate()));
+  const boosts = boostsDeLaSemaine(t);
+  const candidats = MARCHANDS.filter((m) => !boosts.includes(m.id));
+  const m = candidats[indiceAlea(graine, candidats.length)];
+  return { marchandId: m.id, taux: Math.min(m.taux * COEF_FLASH, Math.max(m.taux, TAUX_FLASH_MAX)), fin: finJour(t) };
+}
+
+/** Taux partenaire (en %) avant palier, boost ou offre flash compris. */
 export function tauxMarchand(marchandId: string, t: number): number {
   const marchand = trouverMarchand(marchandId);
   if (!marchand) return TAUX_BASE;
+  const flash = offreFlash(t);
+  if (flash.marchandId === marchand.id) return flash.taux;
   return boostsDeLaSemaine(t).includes(marchand.id) ? marchand.taux * COEF_BOOST : marchand.taux;
 }
 
