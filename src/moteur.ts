@@ -135,8 +135,27 @@ export interface Etat {
   accueilVu: boolean;
   /** Succès débloqués : identifiant → date du déblocage. */
   succes: Record<string, number>;
+  /** Alertes « prévenez-moi quand ce marchand dépasse X % ». */
+  alertes: AlerteTaux[];
+  /** Messages envoyés au support (démonstration : rien ne quitte l'appareil). */
+  support: MessageSupport[];
   /** Décalage de l'horloge pour la démonstration (« avancer le temps »). */
   decalage: number;
+}
+
+export interface AlerteTaux {
+  id: string;
+  marchandId: string;
+  /** Seuil en %, palier compris. */
+  seuil: number;
+  date: number;
+}
+
+export interface MessageSupport {
+  id: string;
+  sujet: string;
+  message: string;
+  date: number;
 }
 
 export interface Palier {
@@ -179,6 +198,8 @@ function champsParDefaut() {
     notificationsLues: 0,
     notificationsEnvoyees: 0,
     succes: {} as Record<string, number>,
+    alertes: [] as AlerteTaux[],
+    support: [] as MessageSupport[],
   };
 }
 

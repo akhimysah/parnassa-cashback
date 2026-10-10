@@ -6,6 +6,7 @@ import { valeurCarte } from '../cartes';
 import { bilanMarchand } from '../statistiques';
 import { codesDe } from '../codes';
 import { historiqueTaux, prochainePromo } from '../calendrier';
+import { ajouterAlerte, supprimerAlerte } from '../alertes';
 import { Feuille } from './Feuille';
 import { Logo } from './Logo';
 
@@ -69,6 +70,8 @@ export function FicheMarchand({ id, fermer, etat, t, modifier, signaler, ouvrirB
       </div>
 
       <HistoriqueTaux id={m.id} t={t} multiplicateur={palier.multiplicateur} />
+
+      <Alerte marchandId={m.id} etat={etat} t={t} modifier={modifier} signaler={signaler} />
 
       <table className="paliers">
         <tbody>
@@ -176,5 +179,47 @@ function HistoriqueTaux({ id, t, multiplicateur }: { id: string; t: number; mult
         ))}
       </div>
     </section>
+  );
+}
+
+/** « Prévenez-moi quand ce marchand dépasse X % ». */
+function Alerte({ marchandId, etat, t, modifier, signaler }: Pick<Contexte, 'etat' | 't' | 'modifier' | 'signaler'> & { marchandId: string }) {
+  const m = trouverMarchand(marchandId)!;
+  const mult = M.palierActuel(etat, t).palier.multiplicateur;
+  const existante = etat.alertes.find((a) => a.marchandId === marchandId);
+  const suggestion = Math.round(m.taux * M.COEF_BOOST * mult * 10) / 10;
+  const [ouvert, setOuvert] = useState(false);
+  const [saisie, setSaisie] = useState(String(existante?.seuil ?? suggestion).replace('.', ','));
+  const seuil = Number(saisie.replace(',', '.').replace('%', '').trim());
+
+  if (!ouvert) {
+    return (
+      <button className="alerte-taux" onClick={() => setOuvert(true)}>
+        🔔 {existante ? `Alerte à ${M.formatTaux(existante.seuil)} — modifier` : `M'alerter quand le taux dépasse…`}
+      </button>
+    );
+  }
+  return (
+    <form
+      className="alerte-taux ouverte"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (modifier((s, tt) => ajouterAlerte(s, marchandId, seuil, tt))) {
+          signaler(`Alerte créée : ${m.nom} à ${M.formatTaux(seuil)}`);
+          setOuvert(false);
+        }
+      }}
+    >
+      <label className="petit-texte" htmlFor={`seuil-${marchandId}`}>Prévenez-moi quand {m.nom} atteint (taux habituel {M.formatTaux(m.taux * mult)}) :</label>
+      <div className="rangee">
+        <input id={`seuil-${marchandId}`} className="champ" inputMode="decimal" value={saisie} onChange={(e) => setSaisie(e.target.value)} aria-invalid={!Number.isFinite(seuil)} />
+        <button className="bouton" style={{ width: 'auto' }} disabled={!Number.isFinite(seuil) || seuil <= 0}>OK</button>
+        {existante && (
+          <button type="button" className="bouton secondaire" style={{ width: 'auto' }} onClick={() => { modifier((s) => supprimerAlerte(s, existante.id)); setOuvert(false); }}>
+            Supprimer
+          </button>
+        )}
+      </div>
+    </form>
   );
 }

@@ -6,6 +6,8 @@ import { marquerCarte } from '../cartes';
 import { historiqueCsv, telecharger } from '../exporter';
 import { exporterSauvegarde, lireSauvegarde } from '../sauvegarde';
 import { ASSOCIATIONS, TAUX_REDUCTION, trouverAssociation } from '../associations';
+import { alertesDeclenchees, supprimerAlerte } from '../alertes';
+import { chercher, envoyerMessage } from '../aide';
 import { Logo } from './Logo';
 import { Parrainer } from './Parrainer';
 
@@ -19,6 +21,8 @@ export function Profil(ctx: Contexte) {
 
   if (vue === 'coffre') return <SousPage titre={etat.coffre.nom} retour={retour}><Coffre {...ctx} /></SousPage>;
   if (vue === 'cartes') return <SousPage titre="Cartes cadeaux" retour={retour}><Cartes {...ctx} /></SousPage>;
+  if (vue === 'alertes') return <SousPage titre="Alertes de taux" retour={retour}><Alertes {...ctx} /></SousPage>;
+  if (vue === 'aide') return <SousPage titre="Centre d'aide" retour={retour}><Aide {...ctx} /></SousPage>;
   if (vue === 'dons') return <SousPage titre="Dons solidaires" retour={retour}><Dons {...ctx} /></SousPage>;
   if (vue === 'reclamations') return <SousPage titre="Cashback manquant" retour={retour}><Reclamations {...ctx} /></SousPage>;
   if (vue === 'parrainage') return <SousPage titre="Parrainer" retour={retour}><Parrainer {...ctx} /></SousPage>;
@@ -33,8 +37,10 @@ export function Profil(ctx: Contexte) {
     ['coffre', '🐷', etat.coffre.nom, `${M.formatEuros(M.soldeCoffre(etat))} sur ${M.formatEuros(etat.coffre.objectif)}`],
     ['cartes', '🎁', 'Cartes cadeaux', cartesActives ? `${cartesActives} à utiliser` : 'Convertissez votre cashback avec bonus'],
     ['dons', '💝', 'Dons solidaires', totalDons ? `${M.formatEuros(totalDons)} donnés · merci !` : 'Donnez tout ou partie de votre cashback'],
+    ['alertes', '🔔', 'Alertes de taux', etat.alertes.length ? `${etat.alertes.length} alerte${etat.alertes.length > 1 ? 's' : ''} active${etat.alertes.length > 1 ? 's' : ''}` : 'Soyez prévenu des meilleures promos'],
     ['reclamations', '📨', 'Cashback manquant', enEtude ? `${enEtude} réclamation${enEtude > 1 ? 's' : ''} en cours` : 'Signaler un achat non crédité'],
     ['parrainage', '💜', 'Parrainer', `${M.formatEuros(M.BONUS_PARRAINAGE)} par ami · code ${etat.codeParrainage}`],
+    ['aide', '❓', 'Aide et contact', 'Questions fréquentes, nous écrire'],
     ['reglages', '⚙️', 'Réglages', 'Thème, versement automatique, notifications'],
   ];
 
@@ -436,6 +442,89 @@ function Dons({ etat, ouvrirUtiliser }: Contexte) {
                 <span className="discret">{date.format(v.date)}</span>
               </div>
               <span className="montant">{M.formatEuros(v.montant)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function Alertes({ etat, t, modifier, ouvrirMarchand }: Contexte) {
+  const actives = new Set(alertesDeclenchees(etat, t).map((d) => d.alerte.id));
+  return (
+    <>
+      <p className="discret">Créez une alerte depuis la fiche d'un marchand : vous êtes prévenu dès qu'un boost ou une offre flash atteint votre seuil.</p>
+      {etat.alertes.length === 0 && <p className="vide">Aucune alerte pour l'instant.</p>}
+      <ul className="liste">
+        {etat.alertes.map((a) => {
+          const m = trouverMarchand(a.marchandId)!;
+          return (
+            <li key={a.id} className={`offre ${actives.has(a.id) ? 'choisie' : ''}`}>
+              <button className="offre-ouvrir" onClick={() => ouvrirMarchand(m.id)}>
+                <Logo marchand={m} />
+                <span className="offre-texte">
+                  <b>{m.nom}</b>
+                  <span className="discret">
+                    Dès {M.formatTaux(a.seuil)} · actuellement {M.formatTaux(M.tauxMarchand(m.id, t) * M.palierActuel(etat, t).palier.multiplicateur)}
+                    {actives.has(a.id) && ' · atteint !'}
+                  </span>
+                </span>
+              </button>
+              <button className="puce" onClick={() => modifier((e) => supprimerAlerte(e, a.id))} aria-label={`Supprimer l'alerte ${m.nom}`}>
+                Supprimer
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+function Aide({ etat, modifier, signaler }: Contexte) {
+  const [recherche, setRecherche] = useState('');
+  const [sujet, setSujet] = useState('');
+  const [message, setMessage] = useState('');
+  const resultats = chercher(recherche);
+  return (
+    <>
+      <input className="champ" type="search" placeholder="Rechercher dans l'aide" value={recherche} onChange={(e) => setRecherche(e.target.value)} aria-label="Rechercher dans l'aide" />
+      <div className="faq">
+        {resultats.map((x) => (
+          <details key={x.q} className="carte question">
+            <summary><b>{x.q}</b></summary>
+            <p>{x.r}</p>
+          </details>
+        ))}
+        {resultats.length === 0 && <p className="vide">Aucune réponse trouvée : écrivez-nous ci-dessous.</p>}
+      </div>
+      <form
+        className="carte formulaire"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (modifier((s, tt) => envoyerMessage(s, sujet, message, tt))) {
+            signaler('Message enregistré (démonstration)');
+            setSujet('');
+            setMessage('');
+          }
+        }}
+      >
+        <b>Nous écrire</b>
+        <input className="champ" placeholder="Sujet" value={sujet} onChange={(e) => setSujet(e.target.value)} maxLength={80} aria-label="Sujet" />
+        <textarea className="champ" placeholder="Votre message" rows={4} value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1000} aria-label="Message" />
+        <button className="bouton" disabled={sujet.trim().length < 3 || message.trim().length < 10}>Envoyer</button>
+        <p className="petit-texte">Démonstration : le message reste sur cet appareil, aucun envoi n'est fait.</p>
+      </form>
+      {etat.support.length > 0 && (
+        <ul className="liste">
+          {etat.support.map((m) => (
+            <li key={m.id} className="operation">
+              <span className="notif-icone" aria-hidden>✉️</span>
+              <div className="offre-texte">
+                <b>{m.sujet}</b>
+                <span className="discret">{date.format(m.date)} · {m.message}</span>
+              </div>
             </li>
           ))}
         </ul>

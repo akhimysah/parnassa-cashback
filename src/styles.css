@@ -515,3 +515,24 @@ input[type='range'] { width: 100%; accent-color: var(--violet); }
   padding: calc(6px + env(safe-area-inset-top)) 12px 6px; background: #1f2937; color: #fde68a;
 }
 .fiche-entete { padding-right: 40px; }
+
+/* Alertes de taux */
+.alerte-taux { border: 1px dashed var(--bord); background: none; border-radius: 14px; padding: 10px 12px; text-align: left; font-weight: 600; display: flex; flex-direction: column; gap: 8px; }
+.alerte-taux.ouverte { border-style: solid; background: var(--surface-2); }
+
+/* Centre d'aide */
+.faq { display: flex; flex-direction: column; gap: 8px; }
+.question { padding: 12px 14px; gap: 0; }
+.question summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 8px; }
+.question summary::after { content: '+'; font-weight: 700; color: var(--texte-2); }
+.question[open] summary::after { content: '−'; }
+.question p { margin: 8px 0 0; color: var(--texte-2); }
+textarea.champ { resize: vertical; font: inherit; }
+
+/* Classement */
+.classement-entete { flex-direction: row; align-items: center; gap: 14px; }
+.classement-rang { font-size: 34px; font-weight: 800; min-width: 48px; text-align: center; }
+.classement .operation { gap: 10px; }
+.classement .operation.moi { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, var(--surface)); }
+.classement-position { width: 28px; text-align: center; font-weight: 700; }
+.avatar { width: 34px; height: 34px; border-radius: 99px; display: grid; place-items: center; font-weight: 700; background: var(--surface-2); flex-shrink: 0; }

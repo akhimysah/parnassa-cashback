@@ -19,7 +19,7 @@ const Boutique = lazy(() => import('./composants/Boutique').then((m) => ({ defau
 import { debloquerSucces, trouverSucces } from './succes';
 
 export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
-export type SousProfil = 'menu' | 'coffre' | 'cartes' | 'dons' | 'reclamations' | 'parrainage' | 'reglages';
+export type SousProfil = 'menu' | 'coffre' | 'cartes' | 'dons' | 'alertes' | 'reclamations' | 'parrainage' | 'aide' | 'reglages';
 
 const ONGLETS: { id: Onglet; libelle: string; icone: string }[] = [
   { id: 'accueil', libelle: 'Accueil', icone: '◎' },

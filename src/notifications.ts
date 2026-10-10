@@ -6,6 +6,7 @@ import type { SousProfil } from './App';
 import { BONUS_PARRAINAGE, boostsDeLaSemaine, debutJour, offreFlash, finDeSemaine, formatEuros, formatTaux, palierActuel, SEMAINE, tauxMarchand, type Etat } from './moteur';
 import { serie } from './serie';
 import { trouverSucces } from './succes';
+import { alertesDeclenchees } from './alertes';
 import { moisActifs } from './recap';
 import { cleMois, debutMois } from './defis';
 
@@ -63,6 +64,18 @@ export function evenements(etat: Etat, t: number): Evenement[] {
   // Offre flash du jour, annoncée à minuit.
   const flash = offreFlash(t);
   liste.push({ id: `flash:${flash.fin}`, date: debutJour(t), icone: '⏱️', titre: 'Offre flash du jour', texte: `${trouverMarchand(flash.marchandId)?.nom} : ${formatTaux(flash.taux * palierActuel(etat, t).palier.multiplicateur)} jusqu'à minuit.`, cible: 'offres' });
+
+  for (const d of alertesDeclenchees(etat, t)) {
+    const nom = trouverMarchand(d.alerte.marchandId)?.nom;
+    liste.push({
+      id: `alerte:${d.alerte.id}:${d.depuis}`,
+      date: Math.max(d.depuis, d.alerte.date),
+      icone: '🔔',
+      titre: `Alerte : ${nom} à ${formatTaux(d.taux)}`,
+      texte: `Votre seuil de ${formatTaux(d.alerte.seuil)} est atteint (${d.type === 'flash' ? "offre flash jusqu'à minuit" : 'boost jusqu’à dimanche'}).`,
+      cible: 'offres',
+    });
+  }
 
   // Favoris en promo : alerte dédiée, en plus de l'annonce générale.
   if (etat.favoris.includes(flash.marchandId)) {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Contexte } from '../App';
 import { Succes } from './Succes';
+import { Classement } from './Classement';
 import { avancement, defisDuMois, finMois, reclamerDefi } from '../defis';
 import * as M from '../moteur';
 import { BONUS_SERIE, PALIER_SERIE, recupererSerie, serie } from '../serie';
@@ -85,19 +86,19 @@ function DefisDuMois({ etat, t, modifier, signaler }: Contexte) {
 }
 
 export function Defis(ctx: Contexte) {
-  const [vue, setVue] = useState<'defis' | 'succes'>('defis');
+  const [vue, setVue] = useState<'defis' | 'succes' | 'classement'>('defis');
   const nomMois = mois.format(ctx.t);
   return (
     <>
-      <h1>{vue === 'defis' ? `Défis ${/^[aeiou]/.test(nomMois) ? 'd’' : 'de '}${nomMois}` : 'Succès'}</h1>
-      <div className="segments" role="tablist">
-        {(['defis', 'succes'] as const).map((v) => (
+      <h1>{vue === 'defis' ? `Défis ${/^[aeiou]/.test(nomMois) ? 'd’' : 'de '}${nomMois}` : vue === 'succes' ? 'Succès' : 'Classement du mois'}</h1>
+      <div className="segments trois" role="tablist">
+        {(['defis', 'succes', 'classement'] as const).map((v) => (
           <button key={v} role="tab" aria-selected={vue === v} className={vue === v ? 'actif' : ''} onClick={() => setVue(v)}>
-            {v === 'defis' ? 'Défis et série' : 'Succès'}
+            {v === 'defis' ? 'Défis' : v === 'succes' ? 'Succès' : 'Classement'}
           </button>
         ))}
       </div>
-      {vue === 'defis' ? <DefisDuMois {...ctx} /> : <Succes {...ctx} />}
+      {vue === 'defis' ? <DefisDuMois {...ctx} /> : vue === 'succes' ? <Succes {...ctx} /> : <Classement {...ctx} />}
     </>
   );
 }
