@@ -4,25 +4,30 @@ import { CATEGORIES, MARCHANDS, type Categorie } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
 
-export function Offres({ etat, t, modifier, signaler }: Contexte) {
+type Filtre = Categorie | 'Activées' | 'Boostées' | null;
+
+export function Offres({ etat, t, modifier, signaler, ouvrirMarchand }: Contexte) {
   const [recherche, setRecherche] = useState('');
-  const [categorie, setCategorie] = useState<Categorie | 'Activées' | null>(null);
+  const [filtre, setFiltre] = useState<Filtre>(null);
   const mult = M.palierActuel(etat, t).palier.multiplicateur;
+  const boosts = M.boostsDeLaSemaine(t);
 
   const q = recherche.trim().toLocaleLowerCase('fr');
+  const garde = (id: string, categorie: Categorie) =>
+    filtre === null ||
+    (filtre === 'Activées' ? etat.offresActivees.includes(id) : filtre === 'Boostées' ? boosts.includes(id) : categorie === filtre);
   const liste = MARCHANDS.filter(
-    (m) =>
-      (!q || m.nom.toLocaleLowerCase('fr').includes(q) || m.accroche.toLocaleLowerCase('fr').includes(q)) &&
-      (categorie === null || (categorie === 'Activées' ? etat.offresActivees.includes(m.id) : m.categorie === categorie)),
-  ).sort((a, b) => b.taux - a.taux);
+    (m) => (!q || m.nom.toLocaleLowerCase('fr').includes(q) || m.accroche.toLocaleLowerCase('fr').includes(q)) && garde(m.id, m.categorie),
+  ).sort((a, b) => M.tauxMarchand(b.id, t) - M.tauxMarchand(a.id, t));
 
   return (
     <>
       <h1>Offres partenaires</h1>
       <input className="champ" type="search" placeholder="Rechercher un marchand" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
       <div className="filtres">
-        {([null, 'Activées', ...CATEGORIES] as const).map((c) => (
-          <button key={c ?? 'tout'} className={`puce ${categorie === c ? 'active' : ''}`} onClick={() => setCategorie(c)}>
+        {([null, 'Boostées', 'Activées', ...CATEGORIES] as const).map((c) => (
+          <button key={c ?? 'tout'} className={`puce ${filtre === c ? 'active' : ''}`} onClick={() => setFiltre(c)}>
+            {c === 'Boostées' && '⚡ '}
             {c ?? 'Tout'}
             {c === 'Activées' && ` (${etat.offresActivees.length})`}
           </button>
@@ -31,19 +36,26 @@ export function Offres({ etat, t, modifier, signaler }: Contexte) {
       <ul className="liste">
         {liste.map((m) => {
           const actif = etat.offresActivees.includes(m.id);
+          const booste = boosts.includes(m.id);
           return (
-            <li key={m.id} className="offre">
-              <Logo marchand={m} />
-              <div className="offre-texte">
-                <b>{m.nom}</b>
-                <span className="discret">{m.accroche}</span>
-                <span className="conditions">
-                  {m.plafond !== undefined && `Plafond ${M.formatEuros(m.plafond)} · `}
-                  Disponible après {m.delaiJours} j
-                </span>
-              </div>
+            <li key={m.id} className={`offre ${booste ? 'boostee' : ''}`}>
+              <button className="offre-ouvrir" onClick={() => ouvrirMarchand(m.id)} aria-label={`Détails de l'offre ${m.nom}`}>
+                <Logo marchand={m} />
+                <div className="offre-texte">
+                  <b>{m.nom}</b>
+                  <span className="discret">{m.accroche}</span>
+                  <span className="conditions">
+                    {booste && <span className="eclair">⚡ Boost ×{M.COEF_BOOST.toLocaleString('fr-FR')} · </span>}
+                    {m.plafond !== undefined && `Plafond ${M.formatEuros(m.plafond)} · `}
+                    Disponible après {m.delaiJours} j
+                  </span>
+                </div>
+              </button>
               <div className="offre-action">
-                <span className="taux">{M.formatTaux(m.taux * mult)}</span>
+                <span className="taux">
+                  {booste && <s className="ancien">{M.formatTaux(m.taux * mult)}</s>}
+                  {M.formatTaux(M.tauxMarchand(m.id, t) * mult)}
+                </span>
                 <button
                   className={`puce ${actif ? 'active' : ''}`}
                   onClick={() => {

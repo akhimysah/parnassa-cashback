@@ -7,7 +7,7 @@ export function charger(): Etat {
     const brut = localStorage.getItem(CLE);
     if (brut) {
       const e = JSON.parse(brut) as Etat;
-      if (e?.version === 1) return e;
+      if (e?.version === 1) return { ...e, bonus: e.bonus ?? [] };
     }
   } catch {
     // Stockage indisponible (navigation privée) : on repart d'un état neuf.

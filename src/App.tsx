@@ -5,12 +5,15 @@ import { Accueil } from './composants/Accueil';
 import { Offres } from './composants/Offres';
 import { Activite } from './composants/Activite';
 import { Parrainer } from './composants/Parrainer';
+import { Defis } from './composants/Defis';
+import { FicheMarchand } from './composants/FicheMarchand';
 
-export type Onglet = 'accueil' | 'offres' | 'activite' | 'parrainer';
+export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'parrainer';
 
 const ONGLETS: { id: Onglet; libelle: string; icone: string }[] = [
   { id: 'accueil', libelle: 'Accueil', icone: '◎' },
   { id: 'offres', libelle: 'Offres', icone: '✦' },
+  { id: 'defis', libelle: 'Défis', icone: '★' },
   { id: 'activite', libelle: 'Activité', icone: '≡' },
   { id: 'parrainer', libelle: 'Parrainer', icone: '♥' },
 ];
@@ -18,9 +21,11 @@ const ONGLETS: { id: Onglet; libelle: string; icone: string }[] = [
 export interface Contexte {
   etat: M.Etat;
   t: number;
-  modifier: (f: (e: M.Etat, t: number) => M.Etat) => void;
+  /** Applique une modification ; renvoie false (et affiche l'erreur) si elle est refusée. */
+  modifier: (f: (e: M.Etat, t: number) => M.Etat) => boolean;
   aller: (o: Onglet) => void;
   signaler: (message: string) => void;
+  ouvrirMarchand: (id: string) => void;
 }
 
 export function App() {
@@ -28,6 +33,7 @@ export function App() {
   const [onglet, setOnglet] = useState<Onglet>('accueil');
   const [horloge, setHorloge] = useState(Date.now);
   const [message, setMessage] = useState<string | null>(null);
+  const [fiche, setFiche] = useState<string | null>(null);
   const t = M.maintenant(etat, horloge);
 
   useEffect(() => {
@@ -55,22 +61,29 @@ export function App() {
       t,
       modifier: (f) => {
         try {
-          setEtat(f(etat, M.maintenant(etat, Date.now())));
+          // L'horloge affichée avance avec l'action, sinon un achat tout juste fait paraîtrait dans le futur.
+          const instant = Date.now();
+          setEtat(f(etat, M.maintenant(etat, instant)));
+          setHorloge(instant);
+          return true;
         } catch (err) {
           setMessage((err as Error).message);
+          return false;
         }
       },
       aller: setOnglet,
       signaler: setMessage,
+      ouvrirMarchand: setFiche,
     }),
     [etat, t],
   );
 
   return (
     <div className="appli">
-      <main className="contenu">
+      <main className="contenu" key={onglet}>
         {onglet === 'accueil' && <Accueil {...ctx} />}
         {onglet === 'offres' && <Offres {...ctx} />}
+        {onglet === 'defis' && <Defis {...ctx} />}
         {onglet === 'activite' && <Activite {...ctx} />}
         {onglet === 'parrainer' && <Parrainer {...ctx} />}
       </main>
@@ -82,6 +95,7 @@ export function App() {
           </button>
         ))}
       </nav>
+      {fiche && <FicheMarchand key={fiche} id={fiche} fermer={() => setFiche(null)} {...ctx} />}
       {message && <div className="toast" role="status">{message}</div>}
     </div>
   );

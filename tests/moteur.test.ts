@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import * as M from '../src/moteur';
+import { MARCHANDS } from '../src/marchands';
 
-const T0 = Date.UTC(2026, 9, 10);
+const BASE = Date.UTC(2026, 9, 10);
+const SANS_BOOST = ['atelier-nord', 'miam', 'table-ronde'];
+let T0 = BASE;
+while (M.boostsDeLaSemaine(T0).some((id) => SANS_BOOST.includes(id))) T0 += M.SEMAINE;
 const neuf = () => M.etatInitial(() => 0.5);
 
 describe('calcul du cashback', () => {
@@ -79,5 +83,43 @@ describe('saisie', () => {
     expect(M.lireMontant('0')).toBeNull();
     expect(M.lireMontant('abc')).toBeNull();
     expect(M.lireMontant('1,234')).toBeNull();
+  });
+});
+
+describe('boosts de la semaine', () => {
+  it('tire deux marchands distincts, stables pendant la semaine', () => {
+    const b = M.boostsDeLaSemaine(T0);
+    expect(new Set(b).size).toBe(M.BOOSTS_PAR_SEMAINE);
+    const fin = M.finDeSemaine(T0);
+    expect(new Date(fin).getDay()).toBe(1);
+    expect(new Date(fin).getHours()).toBe(0);
+    expect(M.boostsDeLaSemaine(fin - 1)).toEqual(b);
+    expect(M.boostsDeLaSemaine(fin - M.SEMAINE + 2 * 3_600_000)).toEqual(b);
+    expect(M.numeroSemaine(fin)).toBe(M.numeroSemaine(T0) + 1);
+  });
+
+  it('change d’une semaine à l’autre sur l’année', () => {
+    const tirages = new Set<string>();
+    for (let i = 0; i < 52; i++) tirages.add(M.boostsDeLaSemaine(T0 + i * M.SEMAINE).join());
+    expect(tirages.size).toBeGreaterThan(20);
+  });
+
+  it('multiplie le taux d’une offre activée et boostée', () => {
+    const id = M.boostsDeLaSemaine(T0)[0];
+    const taux = MARCHANDS.find((m) => m.id === id)!.taux;
+    expect(M.tauxMarchand(id, T0)).toBeCloseTo(taux * M.COEF_BOOST);
+    const e = M.basculerOffre(neuf(), id);
+    expect(M.tauxEffectif(e, id, T0)).toBeCloseTo(taux * M.COEF_BOOST);
+    expect(M.tauxEffectif(neuf(), id, T0)).toBe(M.TAUX_BASE);
+  });
+});
+
+describe('bonus', () => {
+  it('ne crédite qu’une fois une même clé et compte dans le disponible', () => {
+    let e = M.crediterBonus(neuf(), '2026-10:x', 'Défi', 500, T0);
+    expect(M.soldes(e).disponible).toBe(500);
+    expect(() => M.crediterBonus(e, '2026-10:x', 'Défi', 500, T0)).toThrow();
+    e = M.crediterBonus(e, '2026-11:x', 'Défi', 500, T0);
+    expect(M.soldes(e).disponible).toBe(1000);
   });
 });

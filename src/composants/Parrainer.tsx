@@ -41,8 +41,7 @@ export function Parrainer({ etat, modifier, signaler }: Contexte) {
         onSubmit={(e) => {
           e.preventDefault();
           if (!prenom.trim()) return;
-          modifier((s, t) => M.ajouterParrainage(s, prenom, t));
-          signaler(`${prenom.trim()} a rejoint Parnassa : bonus en attente`);
+          if (modifier((s, t) => M.ajouterParrainage(s, prenom, t))) signaler(`${prenom.trim()} a rejoint Parnassa : bonus en attente`);
           setPrenom('');
         }}
       >

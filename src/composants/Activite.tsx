@@ -3,6 +3,7 @@ import type { Contexte } from '../App';
 import { MARCHANDS, trouverMarchand } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
+import { Statistiques } from './Statistiques';
 
 const STATUTS: Record<M.Statut, string> = { en_attente: 'En attente', disponible: 'Disponible', annule: 'Annulé' };
 const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
@@ -10,9 +11,27 @@ const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }
 type Ligne =
   | { type: 'achat'; date: number; a: M.Achat }
   | { type: 'parrainage'; date: number; p: M.Parrainage }
+  | { type: 'bonus'; date: number; b: M.Bonus }
   | { type: 'versement'; date: number; v: M.Versement };
 
-export function Activite({ etat, t, modifier, signaler }: Contexte) {
+export function Activite(ctx: Contexte) {
+  const [vue, setVue] = useState<'historique' | 'statistiques'>('historique');
+  return (
+    <>
+      <h1>Activité</h1>
+      <div className="segments" role="tablist">
+        {(['historique', 'statistiques'] as const).map((v) => (
+          <button key={v} role="tab" aria-selected={vue === v} className={vue === v ? 'actif' : ''} onClick={() => setVue(v)}>
+            {v === 'historique' ? 'Historique' : 'Statistiques'}
+          </button>
+        ))}
+      </div>
+      {vue === 'historique' ? <Historique {...ctx} /> : <Statistiques {...ctx} />}
+    </>
+  );
+}
+
+function Historique({ etat, t, modifier, signaler }: Contexte) {
   const [marchandId, setMarchandId] = useState<string>('');
   const [saisie, setSaisie] = useState('');
   const montant = M.lireMontant(saisie);
@@ -23,19 +42,18 @@ export function Activite({ etat, t, modifier, signaler }: Contexte) {
   const lignes: Ligne[] = [
     ...etat.achats.map((a) => ({ type: 'achat' as const, date: a.date, a })),
     ...etat.parrainages.map((p) => ({ type: 'parrainage' as const, date: p.date, p })),
+    ...etat.bonus.map((b) => ({ type: 'bonus' as const, date: b.date, b })),
     ...etat.versements.map((v) => ({ type: 'versement' as const, date: v.date, v })),
   ].sort((x, y) => y.date - x.date);
 
   return (
     <>
-      <h1>Activité</h1>
       <form
         className="carte formulaire"
         onSubmit={(e) => {
           e.preventDefault();
           if (!montant) return;
-          modifier((s, tt) => M.enregistrerAchat(s, id, montant, tt));
-          signaler(`+${M.formatEuros(apercu)} de cashback en attente`);
+          if (modifier((s, tt) => M.enregistrerAchat(s, id, montant, tt))) signaler(`+${M.formatEuros(apercu)} de cashback en attente`);
           setSaisie('');
         }}
       >
@@ -93,6 +111,22 @@ export function Activite({ etat, t, modifier, signaler }: Contexte) {
                 <div className="offre-action">
                   <span className="montant">+{M.formatEuros(M.BONUS_PARRAINAGE)}</span>
                   <span className={`statut ${p.statut}`}>{STATUTS[p.statut]}</span>
+                </div>
+              </li>
+            );
+          }
+          if (l.type === 'bonus') {
+            const { b } = l;
+            return (
+              <li key={b.id} className="operation">
+                <span className="logo" style={{ width: 38, height: 38, background: '#d97706' }}>★</span>
+                <div className="offre-texte">
+                  <b>{b.libelle}</b>
+                  <span className="discret">{date.format(b.date)}</span>
+                </div>
+                <div className="offre-action">
+                  <span className="montant">+{M.formatEuros(b.montant)}</span>
+                  <span className="statut disponible">Disponible</span>
                 </div>
               </li>
             );

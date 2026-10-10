@@ -2,12 +2,17 @@ import type { Contexte } from '../App';
 import { MARCHANDS } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
+import { avancement, defisDuMois } from '../defis';
 
-export function Accueil({ etat, t, modifier, aller, signaler }: Contexte) {
+export function Accueil({ etat, t, modifier, aller, signaler, ouvrirMarchand }: Contexte) {
   const s = M.soldes(etat);
   const { palier, suivant, progression } = M.palierActuel(etat, t);
   const depenses = M.depenses12Mois(etat, t);
-  const aLaUne = MARCHANDS.filter((m) => m.aLaUne);
+  const boosts = M.boostsDeLaSemaine(t);
+  const aLaUne = [...MARCHANDS.filter((m) => boosts.includes(m.id)), ...MARCHANDS.filter((m) => m.aLaUne && !boosts.includes(m.id))];
+  const defis = defisDuMois(t).map((d) => avancement(etat, d, t));
+  const aRecuperer = defis.filter((a) => a.reussi && !a.reclame).length;
+  const finis = defis.filter((a) => a.reclame).length;
   const peutVerser = s.disponible >= M.VERSEMENT_MINIMUM;
 
   return (
@@ -27,8 +32,7 @@ export function Accueil({ etat, t, modifier, aller, signaler }: Contexte) {
           className="bouton blanc"
           disabled={!peutVerser}
           onClick={() => {
-            modifier(M.verser);
-            signaler(`${M.formatEuros(s.disponible)} versés sur votre compte Parnassa`);
+            if (modifier(M.verser)) signaler(`${M.formatEuros(s.disponible)} versés sur votre compte Parnassa`);
           }}
         >
           {peutVerser ? 'Verser sur mon compte' : `Versement dès ${M.formatEuros(M.VERSEMENT_MINIMUM)}`}
@@ -57,10 +61,13 @@ export function Accueil({ etat, t, modifier, aller, signaler }: Contexte) {
           {aLaUne.map((m) => {
             const actif = etat.offresActivees.includes(m.id);
             return (
-              <article key={m.id} className="vignette" style={{ ['--teinte' as string]: m.couleur }}>
-                <Logo marchand={m} />
-                <b>{m.nom}</b>
-                <span className="taux">{M.formatTaux(m.taux * palier.multiplicateur)}</span>
+              <article key={m.id} className={`vignette ${boosts.includes(m.id) ? 'boostee' : ''}`} style={{ ['--teinte' as string]: m.couleur }}>
+                {boosts.includes(m.id) && <span className="pastille-boost">⚡ Boost</span>}
+                <button className="vignette-ouvrir" onClick={() => ouvrirMarchand(m.id)} aria-label={`Détails de l'offre ${m.nom}`}>
+                  <Logo marchand={m} />
+                  <b>{m.nom}</b>
+                </button>
+                <span className="taux">{M.formatTaux(M.tauxMarchand(m.id, t) * palier.multiplicateur)}</span>
                 <button className={`puce ${actif ? 'active' : ''}`} onClick={() => modifier((e) => M.basculerOffre(e, m.id))}>
                   {actif ? '✓ Activée' : 'Activer'}
                 </button>
@@ -69,6 +76,17 @@ export function Accueil({ etat, t, modifier, aller, signaler }: Contexte) {
           })}
         </div>
       </section>
+
+      <button className="carte resume-defis" onClick={() => aller('defis')} aria-label="Voir les défis du mois">
+        <span className="defi-icone" aria-hidden>★</span>
+        <span className="offre-texte">
+          <b>Défis du mois</b>
+          <span className="discret">
+            {aRecuperer > 0 ? `${aRecuperer} récompense${aRecuperer > 1 ? 's' : ''} à récupérer !` : `${finis} / ${defis.length} réussis`}
+          </span>
+        </span>
+        <span aria-hidden>›</span>
+      </button>
 
       <section className="carte astuce">
         <b>Comment ça marche ?</b>

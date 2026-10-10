@@ -1,7 +1,7 @@
 // Moteur du cashback : calcul, validation dans le temps, paliers, parrainage et versements.
 // Fonctions pures sur un état sérialisable ; tous les montants sont en centimes.
 
-import { trouverMarchand } from './marchands';
+import { MARCHANDS, trouverMarchand } from './marchands';
 
 export const JOUR = 86_400_000;
 /** Cashback de base sur les paiements par carte hors partenaires. */
@@ -33,6 +33,16 @@ export interface Parrainage {
   statut: Statut;
 }
 
+/** Récompense ponctuelle (défi du mois réussi). */
+export interface Bonus {
+  id: string;
+  /** Identifiant unique de ce qui a été récompensé, ex. « 2026-10:gourmand ». */
+  cle: string;
+  libelle: string;
+  montant: number;
+  date: number;
+}
+
 export interface Versement {
   id: string;
   montant: number;
@@ -45,6 +55,7 @@ export interface Etat {
   offresActivees: string[];
   achats: Achat[];
   parrainages: Parrainage[];
+  bonus: Bonus[];
   versements: Versement[];
   /** Décalage de l'horloge pour la démonstration (« avancer le temps »). */
   decalage: number;
@@ -68,7 +79,7 @@ export function etatInitial(alea: () => number = Math.random): Etat {
   const lettres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'PARN-';
   for (let i = 0; i < 6; i++) code += lettres[Math.floor(alea() * lettres.length)];
-  return { version: 1, codeParrainage: code, offresActivees: [], achats: [], parrainages: [], versements: [], decalage: 0 };
+  return { version: 1, codeParrainage: code, offresActivees: [], achats: [], parrainages: [], bonus: [], versements: [], decalage: 0 };
 }
 
 export function maintenant(etat: Etat, horloge = Date.now()): number {
@@ -91,12 +102,48 @@ export function palierActuel(etat: Etat, t: number): { palier: Palier; suivant?:
   return { palier, suivant, progression };
 }
 
-/** Taux effectif (en %) après multiplicateur de palier. */
+export const SEMAINE = 7 * JOUR;
+export const COEF_BOOST = 1.5;
+export const BOOSTS_PAR_SEMAINE = 2;
+
+/** Lundi 0 h (heure locale) de la semaine qui suit celle de `t` : fin des boosts en cours. */
+export function finDeSemaine(t: number): number {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 7);
+  return d.getTime();
+}
+
+/** Numéro de semaine (semaines du lundi au dimanche, heure locale). */
+export function numeroSemaine(t: number): number {
+  return Math.round((finDeSemaine(t) - 4 * JOUR) / SEMAINE);
+}
+
+/** Marchands boostés cette semaine : tirage déterministe, identique pour tout le monde. */
+export function boostsDeLaSemaine(t: number): string[] {
+  let graine = numeroSemaine(t) * 2654435761;
+  const restants = MARCHANDS.map((m) => m.id);
+  const choisis: string[] = [];
+  while (choisis.length < BOOSTS_PAR_SEMAINE && restants.length) {
+    graine = (graine * 1103515245 + 12345) % 2147483648;
+    choisis.push(restants.splice(graine % restants.length, 1)[0]);
+  }
+  return choisis;
+}
+
+/** Taux partenaire (en %) avant palier, boost compris. */
+export function tauxMarchand(marchandId: string, t: number): number {
+  const marchand = trouverMarchand(marchandId);
+  if (!marchand) return TAUX_BASE;
+  return boostsDeLaSemaine(t).includes(marchand.id) ? marchand.taux * COEF_BOOST : marchand.taux;
+}
+
+/** Taux effectif (en %) après boost et multiplicateur de palier. */
 export function tauxEffectif(etat: Etat, marchandId: string | null, t: number): number {
   const { multiplicateur } = palierActuel(etat, t).palier;
   const marchand = trouverMarchand(marchandId);
   if (!marchand || !etat.offresActivees.includes(marchand.id)) return TAUX_BASE * multiplicateur;
-  return marchand.taux * multiplicateur;
+  return tauxMarchand(marchand.id, t) * multiplicateur;
 }
 
 export function calculerCashback(etat: Etat, marchandId: string | null, montant: number, t: number): number {
@@ -175,7 +222,7 @@ export function soldes(etat: Etat): Soldes {
     etat.achats.filter((a) => a.statut === statut).reduce((s, a) => s + a.cashback, 0) +
     etat.parrainages.filter((p) => p.statut === statut).length * BONUS_PARRAINAGE;
   const verse = etat.versements.reduce((s, v) => s + v.montant, 0);
-  const acquis = somme('disponible');
+  const acquis = somme('disponible') + etat.bonus.reduce((s, b) => s + b.montant, 0);
   return { enAttente: somme('en_attente'), disponible: acquis - verse, verse, totalGagne: acquis };
 }
 
@@ -184,6 +231,12 @@ export function verser(etat: Etat, t: number): Etat {
   const { disponible } = soldes(etat);
   if (disponible < VERSEMENT_MINIMUM) throw new Error(`Minimum de versement : ${formatEuros(VERSEMENT_MINIMUM)}`);
   return { ...etat, versements: [{ id: nouvelId('v', t), montant: disponible, date: t }, ...etat.versements] };
+}
+
+/** Ajoute un bonus, une seule fois par clé. */
+export function crediterBonus(etat: Etat, cle: string, libelle: string, montant: number, t: number): Etat {
+  if (etat.bonus.some((b) => b.cle === cle)) throw new Error('Récompense déjà obtenue');
+  return { ...etat, bonus: [{ id: nouvelId('b', t), cle, libelle, montant, date: t }, ...etat.bonus] };
 }
 
 export function avancerTemps(etat: Etat, jours: number): Etat {
