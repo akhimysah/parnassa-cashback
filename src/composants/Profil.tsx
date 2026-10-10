@@ -5,6 +5,7 @@ import * as M from '../moteur';
 import { marquerCarte } from '../cartes';
 import { historiqueCsv, telecharger } from '../exporter';
 import { exporterSauvegarde, lireSauvegarde } from '../sauvegarde';
+import { ASSOCIATIONS, TAUX_REDUCTION, trouverAssociation } from '../associations';
 import { Logo } from './Logo';
 import { Parrainer } from './Parrainer';
 
@@ -18,6 +19,7 @@ export function Profil(ctx: Contexte) {
 
   if (vue === 'coffre') return <SousPage titre={etat.coffre.nom} retour={retour}><Coffre {...ctx} /></SousPage>;
   if (vue === 'cartes') return <SousPage titre="Cartes cadeaux" retour={retour}><Cartes {...ctx} /></SousPage>;
+  if (vue === 'dons') return <SousPage titre="Dons solidaires" retour={retour}><Dons {...ctx} /></SousPage>;
   if (vue === 'reclamations') return <SousPage titre="Cashback manquant" retour={retour}><Reclamations {...ctx} /></SousPage>;
   if (vue === 'parrainage') return <SousPage titre="Parrainer" retour={retour}><Parrainer {...ctx} /></SousPage>;
   if (vue === 'reglages') return <SousPage titre="Réglages" retour={retour}><Reglages {...ctx} /></SousPage>;
@@ -26,9 +28,11 @@ export function Profil(ctx: Contexte) {
   const s = M.soldes(etat);
   const cartesActives = etat.cartes.filter((c) => !c.utilisee).length;
   const enEtude = etat.reclamations.filter((r) => r.statut === 'en_etude').length;
+  const totalDons = etat.versements.filter((v) => v.destination === 'don').reduce((x, v) => x + v.montant, 0);
   const entrees: [Vue, string, string, string][] = [
     ['coffre', '🐷', etat.coffre.nom, `${M.formatEuros(M.soldeCoffre(etat))} sur ${M.formatEuros(etat.coffre.objectif)}`],
     ['cartes', '🎁', 'Cartes cadeaux', cartesActives ? `${cartesActives} à utiliser` : 'Convertissez votre cashback avec bonus'],
+    ['dons', '💝', 'Dons solidaires', totalDons ? `${M.formatEuros(totalDons)} donnés · merci !` : 'Donnez tout ou partie de votre cashback'],
     ['reclamations', '📨', 'Cashback manquant', enEtude ? `${enEtude} réclamation${enEtude > 1 ? 's' : ''} en cours` : 'Signaler un achat non crédité'],
     ['parrainage', '💜', 'Parrainer', `${M.formatEuros(M.BONUS_PARRAINAGE)} par ami · code ${etat.codeParrainage}`],
     ['reglages', '⚙️', 'Réglages', 'Thème, versement automatique, notifications'],
@@ -90,7 +94,10 @@ function Coffre({ etat, modifier, signaler }: Contexte) {
         <div className="jauge claire"><div style={{ width: `${progression * 100}%` }} /></div>
         <p className="etiquette">{progression >= 1 ? 'Objectif atteint 🎉' : `${Math.round(progression * 100)} % de ${M.formatEuros(etat.coffre.objectif)}`}</p>
       </section>
-      <p className="discret">Alimentez le coffre depuis « Utiliser mon cashback » sur l'accueil, ou automatiquement dans les réglages.</p>
+      <p className="discret">
+        Alimentez le coffre depuis « Utiliser mon cashback » sur l'accueil, ou automatiquement dans les réglages (versement automatique, arrondis).
+        {etat.coffre.arrondis.length > 0 && ` Dont ${M.formatEuros(etat.coffre.arrondis.reduce((x, a) => x + a.montant, 0))} d'arrondis sur ${etat.coffre.arrondis.length} achat${etat.coffre.arrondis.length > 1 ? 's' : ''}.`}
+      </p>
 
       <form
         className="carte formulaire"
@@ -292,6 +299,21 @@ function Reglages({ etat, modifier, signaler }: Contexte) {
       <section className="carte">
         <label className="interrupteur">
           <span className="offre-texte">
+            <b>Arrondis vers le coffre</b>
+            <span className="discret">Chaque achat est arrondi à l'euro supérieur : 12,34 € → 0,66 € mis de côté dans « {etat.coffre.nom} ».</span>
+          </span>
+          <input
+            type="checkbox"
+            aria-label="Arrondis vers le coffre"
+            checked={r.arrondi}
+            onChange={(e) => modifier((s) => M.regler(s, { arrondi: e.target.checked })) && signaler(e.target.checked ? 'Arrondis activés' : 'Arrondis désactivés')}
+          />
+        </label>
+      </section>
+
+      <section className="carte">
+        <label className="interrupteur">
+          <span className="offre-texte">
             <b>Notifications du navigateur</b>
             <span className="discret">
               {permission === 'denied' ? 'Bloquées dans les réglages du navigateur.' : permission === 'indisponible' ? 'Non prises en charge sur cet appareil.' : 'Cashback disponible, défis réussis, boosts.'}
@@ -372,5 +394,52 @@ function Demo({ modifier }: Contexte) {
         </button>
       </div>
     </section>
+  );
+}
+
+function Dons({ etat, ouvrirUtiliser }: Contexte) {
+  const dons = etat.versements.filter((v) => v.destination === 'don');
+  const total = dons.reduce((x, v) => x + v.montant, 0);
+  const parAssociation = (id: string) => dons.filter((v) => v.associationId === id).reduce((x, v) => x + v.montant, 0);
+  return (
+    <>
+      <section className="heros compact dons-heros">
+        <p className="etiquette">Vous avez donné</p>
+        <p className="solde">{M.formatEuros(total)}</p>
+        <p className="etiquette">{dons.length ? `en ${dons.length} don${dons.length > 1 ? 's' : ''}` : 'Votre cashback peut aussi aider les autres'}</p>
+      </section>
+      <button className="bouton" onClick={ouvrirUtiliser}>Faire un don</button>
+      <ul className="liste">
+        {ASSOCIATIONS.map((a) => (
+          <li key={a.id} className="offre">
+            <span className="logo" style={{ width: 44, height: 44, background: a.couleur, fontSize: 22 }}>{a.icone}</span>
+            <div className="offre-texte">
+              <b>{a.nom}</b>
+              <span className="discret">{a.cause} · {a.description}</span>
+            </div>
+            <span className="montant">{parAssociation(a.id) ? M.formatEuros(parAssociation(a.id)) : ''}</span>
+          </li>
+        ))}
+      </ul>
+      {total > 0 && (
+        <p className="petit-texte">
+          Pour des associations d'intérêt général, {M.formatEuros(total)} de dons ouvriraient droit à {M.formatEuros(Math.round(total * TAUX_REDUCTION))} de réduction d'impôt. Associations fictives de démonstration : aucun reçu fiscal n'est émis.
+        </p>
+      )}
+      {dons.length > 0 && (
+        <ul className="liste">
+          {dons.slice(0, 10).map((v) => (
+            <li key={v.id} className="operation">
+              <span className="notif-icone" aria-hidden>{trouverAssociation(v.associationId)?.icone ?? '💝'}</span>
+              <div className="offre-texte">
+                <b>{trouverAssociation(v.associationId)?.nom ?? 'Association'}</b>
+                <span className="discret">{date.format(v.date)}</span>
+              </div>
+              <span className="montant">{M.formatEuros(v.montant)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

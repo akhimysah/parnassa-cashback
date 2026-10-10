@@ -18,6 +18,7 @@ const partenaires = (e: Etat): Achat[] => valides(e).filter((a) => a.marchandId 
 const gagne = (e: Etat): number => valides(e).reduce((s, a) => s + a.cashback, 0) + e.bonus.reduce((s, b) => s + b.montant, 0);
 const rangPalier = (e: Etat, t: number): number => PALIERS.indexOf(palierActuel(e, t).palier);
 const depotsCoffre = (e: Etat): number => e.versements.filter((v) => v.destination === 'coffre').reduce((s, v) => s + v.montant, 0);
+const dons = (e: Etat): number => e.versements.filter((v) => v.destination === 'don').reduce((s, v) => s + v.montant, 0);
 const defisReussis = (e: Etat): number => e.bonus.filter((b) => /^\d{4}-\d{2}:/.test(b.cle)).length;
 
 export const SUCCES: Succes[] = [
@@ -38,6 +39,8 @@ export const SUCCES: Succes[] = [
   { id: 'parrain', titre: 'Parrain', icone: '💜', description: 'Parrainer un ami', mesure: (e) => [e.parrainages.length, 1] },
   { id: 'ambassadeur', titre: 'Ambassadeur', icone: '📣', description: 'Parrainer 5 amis', mesure: (e) => [e.parrainages.length, 5] },
   { id: 'epargnant', titre: 'Fourmi', icone: '🐜', description: 'Mettre 50 € de côté dans le coffre', mesure: (e) => [depotsCoffre(e), 5000] },
+  { id: 'genereux', titre: 'Généreux', icone: '💝', description: 'Faire un premier don', mesure: (e) => [Math.min(dons(e), 1), 1] },
+  { id: 'mecene', titre: 'Mécène', icone: '🕊️', description: '50 € donnés à des associations', mesure: (e) => [dons(e), 5000] },
   { id: 'collectionneur', titre: 'Collectionneur', icone: '🎁', description: '3 cartes cadeaux', mesure: (e) => [e.cartes.length, 3] },
 ];
 

@@ -18,7 +18,7 @@ export function Succes({ etat, t }: Contexte) {
       <div className="jauge"><div style={{ width: `${(obtenus / SUCCES.length) * 100}%` }} /></div>
       <ul className="grille-succes">
         {liste.map(({ s, fait, objectif, quand }) => {
-          const argent = ['dix-euros', 'cent-euros', 'epargnant'].includes(s.id);
+          const argent = ['dix-euros', 'cent-euros', 'epargnant', 'mecene'].includes(s.id);
           const valeur = (x: number) => (argent ? M.formatEuros(x).replace(/,00/, '') : String(x));
           return (
             <li key={s.id} className={`badge ${quand ? 'obtenu' : ''}`} title={s.description}>

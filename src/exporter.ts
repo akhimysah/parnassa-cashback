@@ -2,7 +2,7 @@ import { trouverMarchand } from './marchands';
 import type { Etat } from './moteur';
 
 const STATUTS = { en_attente: 'En attente', disponible: 'Disponible', annule: 'Annulé' } as const;
-const DESTINATIONS = { compte: 'Versement compte Parnassa', coffre: 'Mise en coffre', carte: 'Carte cadeau' } as const;
+const DESTINATIONS = { compte: 'Versement compte Parnassa', coffre: 'Mise en coffre', carte: 'Carte cadeau', don: 'Don à une association' } as const;
 
 function cellule(v: string | number): string {
   const texte = String(v);

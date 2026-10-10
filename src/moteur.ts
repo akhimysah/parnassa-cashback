@@ -50,14 +50,16 @@ export interface Bonus {
   date: number;
 }
 
-export type Destination = 'compte' | 'coffre' | 'carte';
+export type Destination = 'compte' | 'coffre' | 'carte' | 'don';
 
-/** Sortie du solde disponible : vers le compte Parnassa, le coffre ou une carte cadeau. */
+/** Sortie du solde disponible : vers le compte Parnassa, le coffre, une carte cadeau ou un don. */
 export interface Versement {
   id: string;
   montant: number;
   date: number;
   destination: Destination;
+  /** Pour un don : l'association bénéficiaire. */
+  associationId?: string;
 }
 
 export interface Mouvement {
@@ -71,6 +73,8 @@ export interface Coffre {
   objectif: number;
   /** Retraits du coffre vers le compte Parnassa (les dépôts sont les versements « coffre »). */
   retraits: Mouvement[];
+  /** Arrondis à l'euro supérieur prélevés sur le compte à chaque achat (épargne automatique). */
+  arrondis: Mouvement[];
 }
 
 export interface CarteCadeau {
@@ -105,6 +109,8 @@ export interface Reglages {
   autoSeuil: number | null;
   autoDestination: 'compte' | 'coffre';
   notifications: boolean;
+  /** Arrondit chaque achat à l'euro supérieur et met la différence dans le coffre. */
+  arrondi: boolean;
   /** Objectif de cashback par mois (centimes) ; null = pas d'objectif. */
   objectifMensuel: number | null;
 }
@@ -166,10 +172,10 @@ function champsParDefaut() {
     bonus: [] as Bonus[],
     versements: [] as Versement[],
     favoris: [] as string[],
-    coffre: { nom: 'Mon coffre', objectif: 20_000, retraits: [] } as Coffre,
+    coffre: { nom: 'Mon coffre', objectif: 20_000, retraits: [], arrondis: [] } as Coffre,
     cartes: [] as CarteCadeau[],
     reclamations: [] as Reclamation[],
-    reglages: { theme: 'auto', autoSeuil: null, autoDestination: 'compte', notifications: false, objectifMensuel: null } as Reglages,
+    reglages: { theme: 'auto', autoSeuil: null, autoDestination: 'compte', notifications: false, arrondi: false, objectifMensuel: null } as Reglages,
     notificationsLues: 0,
     notificationsEnvoyees: 0,
     succes: {} as Record<string, number>,
@@ -226,9 +232,18 @@ export function indiceAlea(graine: number, n: number): number {
   return Math.floor((graine / 0x80000000) * n);
 }
 
-/** Graine entière à partir d'un nombre quelconque (numéro de semaine, de jour…). */
+/**
+ * Graine entière à partir d'un nombre quelconque (numéro de semaine, de jour…).
+ * Brassage « fmix32 » (finalisation de MurmurHash3) : deux entrées voisines donnent des graines sans lien.
+ */
 export function graineDe(n: number): number {
-  return Math.imul(n | 0, 0x9e3779b1) & 0x7fffffff;
+  let h = n | 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h & 0x7fffffff;
 }
 export const COEF_BOOST = 1.5;
 export const BOOSTS_PAR_SEMAINE = 2;
@@ -349,7 +364,9 @@ export function enregistrerAchat(etat: Etat, marchandId: string | null, montant:
     statut: 'en_attente',
     ...(canal === 'magasin' ? { canal } : {}),
   };
-  return { ...etat, achats: [achat, ...etat.achats] };
+  const arrondi = etat.reglages.arrondi ? arrondiDe(montant) : 0;
+  const coffre = arrondi ? { ...etat.coffre, arrondis: [{ id: `${achat.id}-arrondi`, montant: arrondi, date: t }, ...etat.coffre.arrondis] } : etat.coffre;
+  return { ...etat, achats: [achat, ...etat.achats], coffre };
 }
 
 /** Retour produit : le cashback encore en attente est annulé. */
@@ -466,7 +483,20 @@ export function verser(etat: Etat, t: number, destination: Destination = 'compte
 
 export function soldeCoffre(etat: Etat): number {
   const depots = etat.versements.filter((v) => v.destination === 'coffre').reduce((s, v) => s + v.montant, 0);
-  return depots - etat.coffre.retraits.reduce((s, r) => s + r.montant, 0);
+  const arrondis = etat.coffre.arrondis.reduce((s, a) => s + a.montant, 0);
+  return depots + arrondis - etat.coffre.retraits.reduce((s, r) => s + r.montant, 0);
+}
+
+/** Différence jusqu'à l'euro supérieur (0 si le montant est rond). */
+export function arrondiDe(montant: number): number {
+  return (100 - (montant % 100)) % 100;
+}
+
+/** Don à une association, prélevé sur le cashback disponible (n'importe quel montant couvert par le solde). */
+export function donner(etat: Etat, associationId: string, montant: number, t: number): Etat {
+  const apres = verser(etat, t, 'don', montant);
+  const [don, ...reste] = apres.versements;
+  return { ...apres, versements: [{ ...don, associationId }, ...reste] };
 }
 
 /** Retire du coffre vers le compte Parnassa (tout, par défaut). */

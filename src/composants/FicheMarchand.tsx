@@ -5,6 +5,7 @@ import * as M from '../moteur';
 import { valeurCarte } from '../cartes';
 import { bilanMarchand } from '../statistiques';
 import { codesDe } from '../codes';
+import { historiqueTaux, prochainePromo } from '../calendrier';
 import { Feuille } from './Feuille';
 import { Logo } from './Logo';
 
@@ -30,6 +31,24 @@ export function FicheMarchand({ id, fermer, etat, t, modifier, signaler, ouvrirB
           <span className="discret">{m.categorie} · {m.accroche}</span>
         </div>
         <button
+          className="coeur"
+          aria-label={`Partager l'offre ${m.nom}`}
+          onClick={async () => {
+            const texte = `${m.nom} : ${M.formatTaux(M.tauxMarchand(m.id, t))} de cashback avec Parnassa. Mon code de parrainage : ${etat.codeParrainage}`;
+            try {
+              if (navigator.share) await navigator.share({ text: texte });
+              else {
+                await navigator.clipboard.writeText(texte);
+                signaler('Offre copiée');
+              }
+            } catch {
+              // Partage annulé.
+            }
+          }}
+        >
+          ↗
+        </button>
+        <button
           className={`coeur ${favori ? 'plein' : ''}`}
           aria-pressed={favori}
           aria-label={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
@@ -48,6 +67,8 @@ export function FicheMarchand({ id, fermer, etat, t, modifier, signaler, ouvrirB
         {M.offreFlash(t).marchandId === m.id && <p className="bandeau-boost">⏱️ Offre flash : ×{M.COEF_FLASH} jusqu'à minuit</p>}
         {booste && <p className="bandeau-boost">⚡ Boost ×{M.COEF_BOOST.toLocaleString('fr-FR')} jusqu'au {jour.format(M.finDeSemaine(t) - 1)}</p>}
       </div>
+
+      <HistoriqueTaux id={m.id} t={t} multiplicateur={palier.multiplicateur} />
 
       <table className="paliers">
         <tbody>
@@ -125,5 +146,35 @@ export function FicheMarchand({ id, fermer, etat, t, modifier, signaler, ouvrirB
         </details>
       )}
     </Feuille>
+  );
+}
+
+const semaineCourte = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+const jourLong = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+/** Taux semaine par semaine (6 passées, 2 à venir) et prochaine promo. */
+function HistoriqueTaux({ id, t, multiplicateur }: { id: string; t: number; multiplicateur: number }) {
+  const points = historiqueTaux(id, t, 6, 2);
+  const max = Math.max(...points.map((p) => p.max));
+  const promo = prochainePromo(id, t);
+  return (
+    <section className="historique-taux">
+      <div className="ligne-titre">
+        <b>Taux des dernières semaines</b>
+        <span className="petit-texte">{!promo
+            ? 'Pas de promo prévue sous 4 semaines'
+            : M.debutJour(promo.quand) === M.debutJour(t)
+              ? `Promo en cours : ${promo.type === 'flash' ? 'offre flash' : 'boost'}`
+              : `Prochaine promo : ${promo.type === 'flash' ? 'offre flash' : 'boost'} le ${jourLong.format(promo.quand)}`}</span>
+      </div>
+      <div className="barres-taux" role="img" aria-label="Taux par semaine">
+        {points.map((p, i) => (
+          <div key={p.debut} className={`barre-taux ${i === 6 ? 'courante' : ''} ${i > 6 ? 'future' : ''}`} title={`Semaine du ${semaineCourte.format(p.debut)} : jusqu'à ${M.formatTaux(p.max * multiplicateur)}`}>
+            <span className={`colonne-taux ${p.flash ? 'flash' : p.booste ? 'boost' : ''}`} style={{ height: `${(p.max / max) * 100}%` }} />
+            <span className="petit-texte">{i === 6 ? 'auj.' : semaineCourte.format(p.debut).replace(/\.$/, '')}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

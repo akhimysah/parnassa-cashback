@@ -14,11 +14,12 @@ import { Bienvenue } from './composants/Bienvenue';
 // Panneaux ouverts à la demande : chargés seulement au premier usage.
 const Recap = lazy(() => import('./composants/Recap').then((m) => ({ default: m.Recap })));
 const Simulateur = lazy(() => import('./composants/Simulateur').then((m) => ({ default: m.Simulateur })));
+const Calendrier = lazy(() => import('./composants/Calendrier').then((m) => ({ default: m.Calendrier })));
 const Boutique = lazy(() => import('./composants/Boutique').then((m) => ({ default: m.Boutique })));
 import { debloquerSucces, trouverSucces } from './succes';
 
 export type Onglet = 'accueil' | 'offres' | 'defis' | 'activite' | 'profil';
-export type SousProfil = 'menu' | 'coffre' | 'cartes' | 'reclamations' | 'parrainage' | 'reglages';
+export type SousProfil = 'menu' | 'coffre' | 'cartes' | 'dons' | 'reclamations' | 'parrainage' | 'reglages';
 
 const ONGLETS: { id: Onglet; libelle: string; icone: string }[] = [
   { id: 'accueil', libelle: 'Accueil', icone: '◎' },
@@ -45,6 +46,7 @@ export interface Contexte {
   ouvrirSimulateur: () => void;
   /** « Aller sur le site » : redirection suivie puis boutique de démonstration. */
   ouvrirBoutique: (id: string) => void;
+  ouvrirCalendrier: () => void;
   nonLues: number;
 }
 
@@ -55,11 +57,17 @@ type Panneau =
   | { type: 'recap'; cle?: string }
   | { type: 'simulateur' }
   | { type: 'boutique'; id: string }
+  | { type: 'calendrier' }
   | null;
 
 export function App() {
   const [etat, setEtat] = useState(charger);
-  const [onglet, setOnglet] = useState<Onglet>('accueil');
+  // Les raccourcis de l'application installée ouvrent directement un onglet (#offres, #defis…).
+  const [onglet, setOnglet] = useState<Onglet>(() => {
+    const ancre = location.hash.slice(1);
+    return ONGLETS.some((o) => o.id === ancre) ? (ancre as Onglet) : 'accueil';
+  });
+  const [enLigne, setEnLigne] = useState(() => navigator.onLine);
   const [sousProfil, setSousProfil] = useState<SousProfil>('menu');
   const [horloge, setHorloge] = useState(Date.now);
   const [message, setMessage] = useState<string | null>(null);
@@ -69,6 +77,16 @@ export function App() {
   useEffect(() => {
     const id = setInterval(() => setHorloge(Date.now()), 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const maj = () => setEnLigne(navigator.onLine);
+    window.addEventListener('online', maj);
+    window.addEventListener('offline', maj);
+    return () => {
+      window.removeEventListener('online', maj);
+      window.removeEventListener('offline', maj);
+    };
   }, []);
 
   // Le cashback dont le délai est écoulé devient disponible, les réclamations sont tranchées,
@@ -153,6 +171,7 @@ export function App() {
       ouvrirRecap: (cle) => setPanneau({ type: 'recap', cle }),
       ouvrirSimulateur: () => setPanneau({ type: 'simulateur' }),
       ouvrirBoutique: (id) => setPanneau({ type: 'boutique', id }),
+      ouvrirCalendrier: () => setPanneau({ type: 'calendrier' }),
       nonLues: nbNonLues,
       sousProfil,
     }),
@@ -162,6 +181,7 @@ export function App() {
 
   return (
     <div className="appli">
+      {!enLigne && <div className="hors-ligne" role="status">Hors ligne — vos données restent disponibles sur cet appareil</div>}
       <main className="contenu" key={`${onglet}:${sousProfil}`}>
         {onglet === 'accueil' && <Accueil {...ctx} />}
         {onglet === 'offres' && <Offres {...ctx} />}
@@ -183,6 +203,7 @@ export function App() {
       <Suspense fallback={null}>
         {panneau?.type === 'recap' && <Recap cle={panneau.cle} fermer={fermer} {...ctx} />}
         {panneau?.type === 'simulateur' && <Simulateur fermer={fermer} {...ctx} />}
+        {panneau?.type === 'calendrier' && <Calendrier fermer={fermer} {...ctx} />}
         {panneau?.type === 'boutique' && <Boutique key={panneau.id} id={panneau.id} fermer={fermer} {...ctx} />}
       </Suspense>
       {!etat.accueilVu && <Bienvenue terminer={() => setEtat((e) => ({ ...e, accueilVu: true }))} />}

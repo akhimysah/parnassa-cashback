@@ -482,3 +482,36 @@ input[type='range'] { width: 100%; accent-color: var(--violet); }
   .carte-leaflet { height: 380px; }
 }
 .epingle b { transform: rotate(45deg); }
+
+/* Utiliser : quatre choix sur deux lignes */
+.choix { grid-template-columns: repeat(2, 1fr); }
+
+/* Dons */
+.dons-heros { background: radial-gradient(120% 90% at 100% 0%, #fb7185 0%, transparent 60%), linear-gradient(160deg, #e11d48 0%, #7c3aed 100%); }
+
+/* Calendrier des promos */
+.sous-titre { font-size: 15px; margin: 4px 0 -4px; }
+.calendrier .entree { font-size: 15px; padding: 10px 12px; }
+.calendrier .entree.aujourdhui { border-color: #f59e0b; }
+.calendrier-jour { width: 92px; flex-shrink: 0; font-weight: 650; text-transform: capitalize; font-size: 14px; }
+.semaine-boost { gap: 8px; padding: 12px; }
+.semaine-boost .mini-marchand { flex: 1; }
+.tuile-titre { font-size: 15px !important; line-height: 1.25; }
+
+/* Historique des taux */
+.historique-taux { display: flex; flex-direction: column; gap: 8px; }
+.barres-taux { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; height: 92px; align-items: end; }
+.barre-taux { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 3px; }
+.barre-taux .petit-texte { font-size: 10px; white-space: nowrap; }
+.colonne-taux { width: 100%; max-width: 22px; border-radius: 5px 5px 2px 2px; background: color-mix(in srgb, var(--teinte, var(--violet)) 55%, var(--surface-2)); min-height: 4px; }
+.colonne-taux.boost { background: #f59e0b; }
+.colonne-taux.flash { background: linear-gradient(180deg, #f97316, #db2777); }
+.barre-taux.courante .petit-texte { font-weight: 800; color: var(--texte); }
+.barre-taux.future .colonne-taux { opacity: .55; outline: 1.5px dashed var(--texte-2); outline-offset: -1.5px; }
+
+/* Hors ligne */
+.hors-ligne {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40; text-align: center; font-size: 13px; font-weight: 600;
+  padding: calc(6px + env(safe-area-inset-top)) 12px 6px; background: #1f2937; color: #fde68a;
+}
+.fiche-entete { padding-right: 40px; }

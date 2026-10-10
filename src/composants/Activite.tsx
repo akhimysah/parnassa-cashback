@@ -4,6 +4,7 @@ import { MARCHANDS, trouverMarchand } from '../marchands';
 import * as M from '../moteur';
 import { Logo } from './Logo';
 import { Statistiques } from './Statistiques';
+import { trouverAssociation } from '../associations';
 import { DetailAchat } from './DetailAchat';
 
 const STATUTS: Record<M.Statut, string> = { en_attente: 'En attente', disponible: 'Disponible', annule: 'Annulé' };
@@ -11,6 +12,7 @@ const DESTINATIONS = {
   compte: { libelle: 'Versement sur le compte Parnassa', icone: '↧', couleur: '#0f766e' },
   coffre: { libelle: 'Mis de côté', icone: '🐷', couleur: '#db2777' },
   carte: { libelle: 'Carte cadeau', icone: '🎁', couleur: '#7c3aed' },
+  don: { libelle: 'Don', icone: '💝', couleur: '#e11d48' },
 } as const;
 const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -192,7 +194,7 @@ function Historique(ctx: Contexte) {
             <li key={v.id} className="operation">
               <span className="logo" style={{ width: 38, height: 38, background: DESTINATIONS[v.destination].couleur }}>{DESTINATIONS[v.destination].icone}</span>
               <div className="offre-texte">
-                <b>{v.destination === 'coffre' ? `Mis de côté dans « ${etat.coffre.nom} »` : DESTINATIONS[v.destination].libelle}</b>
+                <b>{v.destination === 'coffre' ? `Mis de côté dans « ${etat.coffre.nom} »` : v.destination === 'don' ? `Don à ${trouverAssociation(v.associationId)?.nom ?? 'une association'}` : DESTINATIONS[v.destination].libelle}</b>
                 <span className="discret">{date.format(v.date)}</span>
               </div>
               <div className="offre-action">

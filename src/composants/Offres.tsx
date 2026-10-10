@@ -33,7 +33,7 @@ export function Offres(ctx: Contexte) {
   );
 }
 
-function EnLigne({ etat, t, modifier, signaler, ouvrirMarchand, ouvrirSimulateur }: Contexte) {
+function EnLigne({ etat, t, modifier, signaler, ouvrirMarchand, ouvrirSimulateur, ouvrirCalendrier }: Contexte) {
   const [recherche, setRecherche] = useState('');
   const [filtre, setFiltre] = useState<Filtre>(null);
   const [tri, setTri] = useState<Tri>('taux');
@@ -59,14 +59,18 @@ function EnLigne({ etat, t, modifier, signaler, ouvrirMarchand, ouvrirSimulateur
 
   return (
     <>
-      <button className="carte resume-defis simulateur-entree" onClick={ouvrirSimulateur}>
-        <span className="defi-icone" aria-hidden>🧮</span>
-        <span className="offre-texte">
-          <b>Combien puis-je gagner ?</b>
-          <span className="discret">Estimez votre cashback sur un an</span>
-        </span>
-        <span aria-hidden>›</span>
-      </button>
+      <div className="duo">
+        <button className="carte tuile" onClick={ouvrirSimulateur}>
+          <span className="tuile-icone" aria-hidden>🧮</span>
+          <b className="tuile-titre">Combien puis-je gagner ?</b>
+          <span className="petit-texte">Estimation sur un an</span>
+        </button>
+        <button className="carte tuile" onClick={ouvrirCalendrier}>
+          <span className="tuile-icone" aria-hidden>📅</span>
+          <b className="tuile-titre">Calendrier des promos</b>
+          <span className="petit-texte">Flashs et boosts à venir</span>
+        </button>
+      </div>
       <div className="rangee">
         <input className="champ" type="search" placeholder="Rechercher un marchand" value={recherche} onChange={(e) => setRecherche(e.target.value)} aria-label="Rechercher un marchand" />
         <select className="champ tri" value={tri} onChange={(e) => setTri(e.target.value as Tri)} aria-label="Trier">
